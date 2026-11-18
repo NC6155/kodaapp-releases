@@ -4,7 +4,7 @@ import bcrypt from "bcrypt";
 
 import { db } from "../../../lib/db";
 import { getUsuarioDesdeSesion } from "../../../lib/auth";
-import { validarContrasena } from "../../../lib/validarcontrasena";
+import { validarContrasena } from "../../../lib/validarContrasena";
 
 /**
  * =====================================================
