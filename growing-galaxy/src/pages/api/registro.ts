@@ -11,7 +11,7 @@ import {
 
 import {
   validarContrasena
-} from "../../lib/validarContrasena";
+} from "../../lib/validarcontrasena";
 
 import {
   validarRut,
