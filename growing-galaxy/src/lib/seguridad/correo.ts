@@ -23,7 +23,7 @@ export function generarCodigo(): string {
 
 // Secreto privado para calcular el hash del código.
 function obtenerSecreto(): string {
-  const secreto = import.meta.env.EMAIL_CODE_SECRET;
+  const secreto = process.env.EMAIL_CODE_SECRET;
 
   if (!secreto || secreto.length < 32) {
     throw new Error(
@@ -71,17 +71,17 @@ export async function enviarCodigo(
   const puerto = Number(import.meta.env.SMTP_PORT || 465);
 
   const transportador = nodemailer.createTransport({
-    host: import.meta.env.SMTP_HOST || "smtp.gmail.com",
+    host: process.env.SMTP_HOST || "smtp.gmail.com",
     port: puerto,
     secure: puerto === 465,
     auth: {
-      user: import.meta.env.SMTP_USER,
-      pass: import.meta.env.SMTP_APP_PASSWORD
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_APP_PASSWORD
     }
   });
 
   await transportador.sendMail({
-    from: import.meta.env.SMTP_USER,
+    from: process.env.SMTP_USER,
     to: destinatario,
     subject: "KodApp - Cambiar correo electrónico",
     text: `Tu código de verificación es: ${codigo}
