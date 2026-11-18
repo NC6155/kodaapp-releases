@@ -26,10 +26,10 @@ async function obtenerContenedor(): Promise<ContainerClient> {
   if (!contenedorPendiente) {
     contenedorPendiente = (async () => {
       const conexion =
-        import.meta.env.AZURE_STORAGE_CONNECTION_STRING;
+        process.env.AZURE_STORAGE_CONNECTION_STRING;
 
       const nombre =
-        import.meta.env.AZURE_STORAGE_CONTAINER ||
+        process.env.AZURE_STORAGE_CONTAINER ||
         "kodapp-fotos";
 
       if (!conexion) {

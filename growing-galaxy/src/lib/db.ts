@@ -6,18 +6,18 @@ import { Pool } from "pg";
 // Los datos de conexión se obtienen desde las variables del archivo .env.
 export const db = new Pool({
   // Dirección donde está funcionando PostgreSQL.
-  host: import.meta.env.DB_HOST,
+  host: process.env.DB_HOST,
 
   // Puerto de PostgreSQL.
   // Number() convierte el valor de texto a número.
-  port: Number(import.meta.env.DB_PORT),
+  port: Number(process.env.DB_PORT || 5432),
 
   // Nombre de la base de datos.
-  database: import.meta.env.DB_NAME,
+  database: process.env.DB_NAME,
 
   // Usuario de PostgreSQL.
-  user: import.meta.env.DB_USER,
+  user: process.env.DB_USER,
 
   // Contraseña del usuario de PostgreSQL.
-  password: import.meta.env.DB_PASSWORD,
+  password: process.env.DB_PASSWORD,
 });
