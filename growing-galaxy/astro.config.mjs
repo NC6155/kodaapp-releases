@@ -1,7 +1,9 @@
 import { defineConfig } from 'astro/config';
-import amplify from 'astro-aws-amplify'
+import node from '@astrojs/node';
 
 export default defineConfig({
   output: 'server',
-  adapter: amplify(),
+  adapter: node({
+    mode: 'standalone',
+  }),
 });
