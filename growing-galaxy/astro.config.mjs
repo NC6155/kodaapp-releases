@@ -6,4 +6,15 @@ export default defineConfig({
   adapter: node({
     mode: 'standalone',
   }),
+  // Configuración de seguridad para permitir las solicitudes en la IP elástica de AWS
+  security: {
+    checkOrigin: true,
+
+    allowedDomains: [
+      {
+        hostname: "32.201.144.64", //IP elástica de AWS
+        protocol: "https",
+      },
+    ],
+  },
 });
