@@ -7,6 +7,6 @@ export default defineConfig({
   output: 'server',
   adapter: node({
     mode: 'standalone',
-    bodySizeLimit: 6 * 1024 * 1024,
+    bodySizeLimit: 30 * 1024 * 1024,
   }),
 });

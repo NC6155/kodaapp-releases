@@ -198,6 +198,144 @@ if (usuario.tipo_usuario !== "organizacion") {
 
         <ClasificacionMascota />
 
+        <!-- DATOS ADICIONALES DE LA MASCOTA -->
+
+        <section class="form-section">
+          <div class="form-section-header">
+            <span class="form-step">05</span>
+            <div>
+              <h2>Características de la mascota</h2>
+              <p>Información para que el adoptante conozca mejor a la mascota.</p>
+            </div>
+          </div>
+
+          <div class="form-grid">
+
+            <div class="form-field">
+              <label for="raza">Raza</label>
+              <input
+                type="text"
+                id="raza"
+                name="raza"
+                maxlength="100"
+                placeholder="Ej.: Mestizo"
+              />
+            </div>
+
+            <div class="form-field">
+              <label for="edadMeses">Edad aproximada (meses)</label>
+              <input
+                type="number"
+                id="edadMeses"
+                name="edadMeses"
+                min="0"
+                max="360"
+                step="1"
+                placeholder="Ej.: 18"
+              />
+              <small>12 meses equivalen a un año.</small>
+            </div>
+
+            <div class="form-field">
+              <label for="sexo">Sexo</label>
+              <select id="sexo" name="sexo">
+                <option value="desconocido">Sin especificar</option>
+                <option value="macho">Macho</option>
+                <option value="hembra">Hembra</option>
+              </select>
+            </div>
+
+            <div class="form-field">
+              <label for="tamano">Tamaño</label>
+              <select id="tamano" name="tamano">
+                <option value="desconocido">Sin especificar</option>
+                <option value="pequeno">Pequeño</option>
+                <option value="mediano">Mediano</option>
+                <option value="grande">Grande</option>
+              </select>
+            </div>
+
+            <div class="form-field">
+              <label for="esterilizado">¿Está esterilizada?</label>
+              <select id="esterilizado" name="esterilizado">
+                <option value="desconocido">No se sabe</option>
+                <option value="si">Sí</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+
+            <div class="form-field">
+              <label for="vacunasAlDia">¿Tiene las vacunas al día?</label>
+              <select id="vacunasAlDia" name="vacunasAlDia">
+                <option value="desconocido">No se sabe</option>
+                <option value="si">Sí</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+
+            <div class="form-field form-field-full">
+              <label for="ubicacion">Ubicación</label>
+              <input
+                type="text"
+                id="ubicacion"
+                name="ubicacion"
+                maxlength="120"
+                placeholder="Ej.: Talcahuano"
+              />
+              <small>Indica solo la comuna o sector, no el domicilio exacto.</small>
+            </div>
+
+            <div class="form-field form-field-full">
+              <label for="requisitosAdopcion">Requisitos de adopción</label>
+              <textarea
+                id="requisitosAdopcion"
+                name="requisitosAdopcion"
+                rows="4"
+                maxlength="2000"
+                placeholder="Ej.: Tener espacio adecuado, dedicar tiempo a sus cuidados..."
+              ></textarea>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- GALERÍA DE FOTOGRAFÍAS -->
+
+        <section class="form-section">
+          <div class="form-section-header">
+            <span class="form-step">06</span>
+            <div>
+              <h2>Galería de fotografías</h2>
+              <p>Agrega otras fotografías desde diferentes ángulos.</p>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label for="galeria">Fotografías adicionales</label>
+
+            <input
+              type="file"
+              id="galeria"
+              name="galeria"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+            />
+
+            <small>
+              Hasta 4 fotografías adicionales, de máximo 5 MB cada una.
+              Formatos JPG, PNG o WebP.
+            </small>
+
+            <div
+              id="galeria-preview"
+              class="galeria-preview"
+              aria-live="polite"
+            ></div>
+          </div>
+        </section>
+
+        
+
 
         <!-- MENSAJES -->
 
@@ -303,6 +441,55 @@ if (usuario.tipo_usuario !== "organizacion") {
     previewContainer.replaceChildren(imagen);
   });
 
+// ==========================================
+// VISTA PREVIA DE LA GALERÍA
+// ==========================================
+
+    const galeriaInput =
+      document.querySelector<HTMLInputElement>("#galeria");
+
+    const galeriaPreview =
+      document.querySelector<HTMLElement>("#galeria-preview");
+
+    galeriaInput?.addEventListener("change", () => {
+      if (!galeriaInput || !galeriaPreview) return;
+
+      galeriaPreview.replaceChildren();
+
+      const archivos = Array.from(galeriaInput.files ?? []);
+
+      if (archivos.length > 4) {
+        alert("Puedes seleccionar máximo 4 fotografías adicionales.");
+        galeriaInput.value = "";
+        return;
+      }
+
+      for (const archivo of archivos) {
+        if (
+          !["image/jpeg", "image/png", "image/webp"].includes(archivo.type) ||
+          archivo.size > 5 * 1024 * 1024
+        ) {
+          alert("Cada imagen debe ser JPG, PNG o WebP y pesar máximo 5 MB.");
+          galeriaInput.value = "";
+          galeriaPreview.replaceChildren();
+          return;
+        }
+      }
+
+      for (const archivo of archivos) {
+        const imagen = document.createElement("img");
+        const url = URL.createObjectURL(archivo);
+
+        imagen.src = url;
+        imagen.alt = `Vista previa de ${archivo.name}`;
+        imagen.loading = "lazy";
+
+        imagen.onload = () => URL.revokeObjectURL(url);
+        galeriaPreview.appendChild(imagen);
+      }
+});
+
+
 
   // ==========================================
   // PUBLICAR MASCOTA
@@ -364,3 +551,22 @@ if (usuario.tipo_usuario !== "organizacion") {
     }
   });
 </script>
+
+
+<style>
+  .galeria-preview {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 15px;
+  }
+
+  .galeria-preview img {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 2px solid #f59e0b;
+  }
+</style>
+
