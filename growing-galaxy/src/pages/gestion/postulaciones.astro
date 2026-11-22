@@ -49,16 +49,22 @@ const resultado = await db.query(
 
 const postulaciones = resultado.rows;
 
-const fecha = (valor: Date | string) =>
-  new Date(valor).toLocaleDateString("es-CL", {
+
+const fechaHora = (valor: Date | string) => {
+  return new Date(valor).toLocaleString("es-CL", {
+    timeZone: "America/Santiago",
     day: "2-digit",
     month: "long",
-    year: "numeric"
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
   });
+};
 ---
 
 <Layout
-  title="Postulaciones recibidas | KodApp"
+  title="Postulaciones recibidas | KodaApp"
   description="Revisa y evalúa postulaciones para tus mascotas."
 >
   <Header />
@@ -145,7 +151,7 @@ const fecha = (valor: Date | string) =>
                 <p class="post-date">
                   Postulación recibida:
                   {" "}
-                  {fecha(postulacion.creada_en)}
+                  {fechaHora(postulacion.creada_en)}
                 </p>
 
                 <div class="post-detail">
@@ -189,14 +195,14 @@ const fecha = (valor: Date | string) =>
                     </form>
                   )
                 }
-                {postulacion.fin_tenencia && <p>Tenencia cerrada el {fecha(postulacion.fin_tenencia)}</p>}
+                {postulacion.fin_tenencia && <p>Tenencia cerrada el {fechaHora(postulacion.fin_tenencia)}</p>}
                 {
                   postulacion.estado !== "pendiente" && (
                     <p class="post-date">
                       Evaluada:
                       {" "}
                       {postulacion.resuelta_en
-                        ? fecha(postulacion.resuelta_en)
+                        ? fechaHora(postulacion.resuelta_en)
                         : "Sin fecha"}
                     </p>
                   )

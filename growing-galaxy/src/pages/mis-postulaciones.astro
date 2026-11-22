@@ -128,7 +128,7 @@ const fechaHora = (valor: Date | string) => {
                 <p class="post-date">
                   Enviada el:
                   {" "}
-                  {fecha(postulacion.creada_en)}
+                  {fechaHora(postulacion.creada_en)}
                 </p>
 
                 {
@@ -143,7 +143,7 @@ const fechaHora = (valor: Date | string) => {
                 {
                   postulacion.estado === "aprobada" && (
                     <p>
-                      {postulacion.fin_tenencia ? `Tenencia cerrada el ${fecha(postulacion.fin_tenencia)}.` : "La adopción está activa y ocupa un cupo."}
+                      {postulacion.fin_tenencia ? `Tenencia cerrada el ${fechaHora(postulacion.fin_tenencia)}.` : "La adopción está activa y ocupa un cupo."}
                     </p>
                   )
                 }
