@@ -1,0 +1,280 @@
+
+---
+import Layout from "../../layouts/Layout.astro";
+import Header from "../../components/Header.astro";
+import { db } from "../../lib/db";
+import { urlFotoMascota } from "../../lib/fotos";
+
+export const prerender = false;
+
+const id = Number(Astro.params.id);
+
+if (!Number.isSafeInteger(id) || id <= 0) {
+  return Astro.redirect("/mascotas");
+}
+
+// Consultar la ficha y la organización.
+const resultado = await db.query(
+  `SELECT
+    m.*,
+    u.nombre AS organizacion,
+    EXISTS (
+      SELECT 1
+      FROM mascotas_postulables mp
+      WHERE mp.id = m.id
+    ) AS postulable
+   FROM mascotas m
+   JOIN usuarios u ON u.id = m.usuario_id
+   WHERE m.id = $1
+     AND u.estado_cuenta = 'activo'`,
+  [id]
+);
+
+if (resultado.rows.length === 0) {
+  return Astro.redirect("/mascotas");
+}
+
+const mascota = resultado.rows[0];
+
+// Obtener las fotos adicionales.
+const resultadoFotos = await db.query(
+  `SELECT id
+   FROM mascotas_fotos
+   WHERE mascota_id = $1
+   ORDER BY orden`,
+  [id]
+);
+
+// Foto principal existente.
+const fotoPrincipal = urlFotoMascota(
+  id,
+  mascota.foto_blob
+);
+
+// Construir galería.
+const fotos = [
+  ...(fotoPrincipal ? [fotoPrincipal] : []),
+  ...resultadoFotos.rows.map(
+    (foto) => `/api/fotos/galeria/${foto.id}`
+  )
+];
+
+function mostrarBooleano(valor: boolean | null) {
+  if (valor === null) return "Sin especificar";
+  return valor ? "Sí" : "No";
+}
+
+function mostrarEdad(meses: number | null) {
+  if (meses === null) return "Sin especificar";
+  if (meses < 12) return `${meses} meses`;
+
+  const anos = Math.floor(meses / 12);
+  const resto = meses % 12;
+
+  return `${anos} año(s)${
+    resto ? ` y ${resto} meses` : ""
+  }`;
+}
+---
+
+<Layout
+  title={`Ficha de ${mascota.nombre} | KodApp`}
+  description={`Conoce a ${mascota.nombre}`}
+>
+  <Header />
+
+  <main class="ficha">
+    <a href="/mascotas" class="volver">
+      ← Volver a mascotas
+    </a>
+
+    <h1>Conoce a {mascota.nombre}</h1>
+    <p>Organización: {mascota.organizacion}</p>
+
+    <div class="contenido">
+      <section class="panel">
+        <h2>Fotografías</h2>
+
+        {fotos.length > 0 ? (
+          <>
+            <img
+              id="foto-principal"
+              class="imagen-principal"
+              src={fotos[0]}
+              alt={`Fotografía de ${mascota.nombre}`}
+            />
+
+            <div class="galeria">
+              {fotos.map((foto, indice) => (
+                <button
+                  type="button"
+                  class="miniatura"
+                  data-foto={foto}
+                  aria-label={`Ver fotografía ${indice + 1}`}
+                >
+                  <img src={foto} alt={`Foto ${indice + 1}`} />
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p>No hay fotografías disponibles.</p>
+        )}
+      </section>
+
+      <section class="panel">
+        <h2>Información general</h2>
+
+        <dl class="datos">
+          <div><dt>Nombre</dt><dd>{mascota.nombre}</dd></div>
+          <div><dt>Tipo</dt><dd>{mascota.tipo_mascota}</dd></div>
+          <div><dt>Raza</dt><dd>{mascota.raza ?? "Sin especificar"}</dd></div>
+          <div><dt>Edad</dt><dd>{mostrarEdad(mascota.edad_meses)}</dd></div>
+          <div><dt>Sexo</dt><dd>{mascota.sexo ?? "Sin especificar"}</dd></div>
+          <div><dt>Tamaño</dt><dd>{mascota.tamano ?? "Sin especificar"}</dd></div>
+          <div><dt>Ubicación</dt><dd>{mascota.ubicacion ?? "Sin especificar"}</dd></div>
+          <div><dt>Esterilizado</dt><dd>{mostrarBooleano(mascota.esterilizado)}</dd></div>
+          <div><dt>Vacunas al día</dt><dd>{mostrarBooleano(mascota.vacunas_al_dia)}</dd></div>
+        </dl>
+      </section>
+    </div>
+
+    <section class="panel">
+      <h2>Descripción</h2>
+      <p>{mascota.descripcion || "Sin descripción."}</p>
+
+      <h2>Personalidad</h2>
+      <p>{mascota.personalidad || "Sin especificar."}</p>
+
+      <h2>Historial médico</h2>
+      <p>{mascota.historial_medico || "Sin antecedentes informados."}</p>
+
+      <h2>Requisitos de adopción</h2>
+      <p>{mascota.requisitos_adopcion || "Consultar con la organización."}</p>
+    </section>
+
+    {mascota.postulable ? (
+      <a class="boton-postular" href={`/postular/${id}`}>
+        Postular para adoptar
+      </a>
+    ) : (
+      <p>Esta mascota no está disponible para nuevas postulaciones.</p>
+    )}
+  </main>
+</Layout>
+
+<script>
+  const principal =
+    document.querySelector<HTMLImageElement>("#foto-principal");
+
+  document.querySelectorAll<HTMLButtonElement>(".miniatura")
+    .forEach((boton) => {
+      boton.addEventListener("click", () => {
+        const foto = boton.dataset.foto;
+        if (principal && foto) principal.src = foto;
+      });
+    });
+</script>
+
+<style>
+  .ficha {
+    max-width: 1100px;
+    margin: 40px auto;
+    padding: 20px;
+  }
+
+  .volver {
+    display: inline-block;
+    margin-bottom: 20px;
+    color: #f59e0b;
+  }
+
+  .contenido {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin: 25px 0;
+  }
+
+  .panel {
+    background: #292d36;
+    border: 1px solid #454954;
+    border-radius: 16px;
+    padding: 25px;
+    margin-bottom: 24px;
+  }
+
+  .panel h2 {
+    margin-bottom: 15px;
+  }
+
+  .panel p {
+    white-space: pre-wrap;
+    margin-bottom: 18px;
+  }
+
+  .imagen-principal {
+    width: 100%;
+    height: 340px;
+    object-fit: contain;
+    border-radius: 12px;
+    background: #181b21;
+  }
+
+  .galeria {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 15px;
+  }
+
+  .miniatura {
+    width: 75px;
+    height: 75px;
+    padding: 0;
+    border: 2px solid #f59e0b;
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    background: transparent;
+  }
+
+  .miniatura img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .datos div {
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+    padding: 10px 0;
+    border-bottom: 1px solid #454954;
+  }
+
+  .datos dt {
+    font-weight: bold;
+  }
+
+  .datos dd {
+    margin: 0;
+    text-align: right;
+  }
+
+  .boton-postular {
+    display: inline-block;
+    padding: 14px 24px;
+    border-radius: 10px;
+    background: #f59e0b;
+    color: #171717;
+    font-weight: bold;
+    text-decoration: none;
+  }
+
+  @media (max-width: 768px) {
+    .contenido {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

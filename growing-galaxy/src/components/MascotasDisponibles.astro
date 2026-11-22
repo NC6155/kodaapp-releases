@@ -63,6 +63,14 @@ const mascotas = agregarFotosMascotas(resultado.rows);
               </span>
 
               <h3>{mascota.nombre}</h3>
+              <a
+                href={`/mascotas/${mascota.id}`}
+                class="btn-outline"
+                style="display: inline-block; margin: 12px 0;"
+              >
+                <i class="fa-solid fa-circle-info"></i>
+                Ver ficha completa
+              </a>
 
               {mascota.descripcion && (
                 <p>{mascota.descripcion}</p>
