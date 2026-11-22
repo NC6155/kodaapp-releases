@@ -108,6 +108,9 @@ export const DELETE: APIRoute = async ({
     });
 
   } catch (error) {
+    if (["23001", "23503"].includes((error as {code?: string}).code ?? "")) {
+      return responder({ok: false, mensaje: "Esta mascota tiene postulaciones. Conservamos su historial."}, 409);
+    }
     console.error(
       "Error eliminando mascota:",
       error

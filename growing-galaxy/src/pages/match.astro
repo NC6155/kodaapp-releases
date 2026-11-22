@@ -81,7 +81,7 @@ if (preferencias) {
   const consultaMascotas = await db.query(
     `
     SELECT
-      id,
+      id, foto_blob,
       nombre,
       descripcion,
       tipo_mascota,
@@ -89,14 +89,13 @@ if (preferencias) {
       personalidad_codigo,
       historial_medico,
       salud_codigo
-    FROM mascotas
-    WHERE estado_adopcion = 'disponible'
+    FROM mascotas_postulables
     ORDER BY id DESC
     `
   );
 
   const mascotasConFotos =
-    await agregarFotosMascotas(
+    agregarFotosMascotas(
       consultaMascotas.rows
     );
 

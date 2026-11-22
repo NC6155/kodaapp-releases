@@ -1,9 +1,15 @@
 {
+  "type": "module",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "start": "node ./dist/server/entry.mjs"
+    "start": "node --env-file-if-exists=.env scripts/iniciar.mjs",
+    "migrar": "node --env-file-if-exists=.env scripts/migrar.mjs",
+    "presentar": "node --env-file=.env --env-file=.env.demo.local scripts/presentar.mjs",
+    "verificar:demo": "node --env-file=.env scripts/verificar-demo.mjs",
+    "demo": "node --env-file-if-exists=.env scripts/demo.mjs",
+    "importar": "node --env-file-if-exists=.env scripts/importar.mjs"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.6",

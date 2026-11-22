@@ -77,14 +77,6 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     const usuario = resultado.rows[0];
 
-    // Impedir login en cuentas suspendidas.
-    if (usuario.estado_cuenta !== "activo") {
-      return responder({
-        ok: false,
-        mensaje: "La cuenta no está activa."
-      }, 403);
-    }
-
     // Comparar la clave con su hash bcrypt.
     const correcta = await bcrypt.compare(
       contrasena,
@@ -96,6 +88,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         ok: false,
         mensaje: "Correo o contraseña incorrectos."
       }, 401);
+    }
+
+    // Impedir login en cuentas suspendidas.
+    if (usuario.estado_cuenta !== "activo") {
+      return responder({
+        ok: false,
+        mensaje: "La cuenta no está activa."
+      }, 403);
     }
 
     // Crear un identificador aleatorio seguro.
@@ -113,15 +113,20 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     }
 
     // Registrar la nueva sesión.
-    await db.query(
+    const nuevaSesion = await db.query(
       `INSERT INTO sesiones (
          id,
          usuario_id,
          ultima_actividad
        )
-       VALUES ($1, $2, NOW())`,
+       SELECT $1, id, NOW() FROM usuarios
+       WHERE id = $2 AND estado_cuenta = 'activo' FOR SHARE`,
       [sessionId, usuario.id]
     );
+
+    if (!nuevaSesion.rowCount) {
+      return responder({ok: false, mensaje: "La cuenta no está activa."}, 403);
+    }
 
     // Configurar cookie de una hora renovable.
     cookies.set(NOMBRE_COOKIE, sessionId, {

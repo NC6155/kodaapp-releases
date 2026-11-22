@@ -256,6 +256,9 @@ export const POST: APIRoute = async ({
     });
 
   } catch (error) {
+    if ((error as {constraint?: string}).constraint === "tenencia_activa") {
+      return responder({ok: false, mensaje: "Cierra la tenencia antes de cambiar la disponibilidad."}, 409);
+    }
     if (error instanceof ErrorImagen) {
       return responder({
         ok: false,

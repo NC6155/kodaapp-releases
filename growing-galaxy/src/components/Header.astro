@@ -49,6 +49,7 @@ if (usuario) {
       aria-label="Navegación principal"
     >
 
+      {usuario?.es_admin && <a href="/admin">Administración</a>}
       <!-- INICIO -->
       <a
         href={usuario ? homeUrl : "/"}
@@ -140,7 +141,7 @@ if (usuario) {
 
               <a href={homeUrl}>
                 <i class="fa-solid fa-house"></i>
-                Mi cuenta
+                Panel de Inicio
               </a>
 
               <a href="/perfil">

@@ -27,3 +27,5 @@ pnpm-debug.log*
 .env
 .env.*
 env.txt
+# Herramientas y certificados de la demo local
+.koda-local/

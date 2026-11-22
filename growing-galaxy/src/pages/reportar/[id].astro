@@ -1,0 +1,37 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import Header from "../../components/Header.astro";
+import {db} from "../../lib/db";
+import {getUsuarioDesdeSesion} from "../../lib/auth";
+const usuario = await getUsuarioDesdeSesion(Astro.cookies.get("session_id")?.value);
+if (!usuario) return Astro.redirect("/login");
+Astro.response.headers.set("Cache-Control","private, no-store");
+const id = Astro.params.id ?? "";
+if (!/^\d{1,18}$/.test(id)) return new Response("Solicitud inválida",{status:404});
+const consulta = await db.query(
+  `SELECT CASE WHEN p.adoptante_id=$1 THEN m.usuario_id ELSE p.adoptante_id END AS cuenta_id,
+   m.nombre FROM postulaciones p JOIN mascotas m ON m.id=p.mascota_id
+   WHERE p.id=$2 AND $1 IN (p.adoptante_id,m.usuario_id)`, [usuario.id,id]);
+if (!consulta.rowCount) return new Response("Postulación no encontrada",{status:404});
+let error = "";
+if (Astro.request.method === "POST") {
+  if (Astro.request.headers.get("origin") !== Astro.url.origin) return new Response("Origen inválido",{status:403});
+  const motivo = String((await Astro.request.formData()).get("motivo") ?? "").trim();
+  if (motivo.length < 10 || motivo.length > 1000) {
+    error = "Describe los hechos en 10 a 1000 caracteres.";
+    Astro.response.status = 400;
+  } else {
+    await db.query("INSERT INTO reportes(autor_id,cuenta_id,motivo,postulacion_id) VALUES ($1,$2,$3,$4)",
+      [usuario.id,consulta.rows[0].cuenta_id,motivo,id]);
+    return Astro.redirect(`/reportar/${id}?enviado=1`,303);
+  }
+}
+---
+<Layout title="Reportar una cuenta | KodaApp"><Header/><main class="management-container">
+<h1>Reportar un incidente</h1>
+<p>Postulación #{id} · {consulta.rows[0].nombre}</p>
+{Astro.url.searchParams.has("enviado") ? <p role="status">Administración recibió el reporte.</p> :
+<form method="post"><label>Describe lo ocurrido con la otra parte <textarea name="motivo" required minlength="10" maxlength="1000"></textarea></label>
+<button class="btn-primary">Enviar reporte</button></form>}
+{error && <p role="alert">{error}</p>}<a href="/formularios">Volver a postulaciones</a>
+</main></Layout>

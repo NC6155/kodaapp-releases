@@ -33,7 +33,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     const datos = await request.json().catch(() => ({}));
 
-    if (typeof datos.descripcion !== "string") {
+    if (typeof datos?.descripcion !== "string") {
       return responder({
         ok: false,
         mensaje: "La descripción no es válida."

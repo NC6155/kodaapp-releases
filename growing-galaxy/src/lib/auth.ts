@@ -10,6 +10,7 @@ export interface UsuarioAutenticado {
   rut: string;
   tipo_usuario: "adoptante" | "organizacion";
   estado_cuenta: string;
+  es_admin: boolean;
   descripcion_perfil: string | null;
   foto_perfil: string | null;
 }
@@ -30,7 +31,8 @@ export async function getUsuarioDesdeSesion(
        tipo_usuario,
        estado_cuenta,
        descripcion_perfil,
-       foto_blob
+       foto_blob,
+       EXISTS (SELECT 1 FROM administradores WHERE usuario_id = usuarios.id) AS es_admin
      FROM usuarios
      WHERE id = $1
        AND estado_cuenta = 'activo'`,
@@ -43,6 +45,7 @@ export async function getUsuarioDesdeSesion(
 
   return {
     id: Number(usuario.id),
+    es_admin: usuario.es_admin,
     nombre: usuario.nombre,
     correo: usuario.correo,
     rut: usuario.rut,

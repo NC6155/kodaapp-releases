@@ -3,6 +3,9 @@ import type { APIRoute } from "astro";
 import { db } from "../../../lib/db";
 import { getUsuarioDesdeSesion } from "../../../lib/auth";
 
+import { leerPostulacion } from "../../../lib/postulacion";
+import { comprobarCupo, ReglaAdopcion } from "../../../lib/adopcion";
+
 export const prerender = false;
 
 /**
@@ -59,88 +62,13 @@ export const POST: APIRoute = async ({
     }, 403);
   }
 
-  const cuerpo: unknown =
-    await request.json().catch(() => null);
-
-  if (
-    !cuerpo ||
-    typeof cuerpo !== "object" ||
-    Array.isArray(cuerpo)
-  ) {
-    return responder({
-      ok: false,
-      mensaje: "Datos inválidos."
-    }, 400);
+  let entrada;
+  try {
+    entrada = leerPostulacion(await request.json().catch(() => null));
+  } catch (error) {
+    return responder({ ok: false, mensaje: (error as Error).message }, 400);
   }
-
-  const datos = cuerpo as Record<string, unknown>;
-
-  const mascotaId = Number(datos.mascotaId);
-
-  const telefono =
-    typeof datos.telefono === "string"
-      ? datos.telefono.trim()
-      : "";
-
-  const vivienda =
-    typeof datos.vivienda === "string"
-      ? datos.vivienda.trim()
-      : "";
-
-  const motivo =
-    typeof datos.motivo === "string"
-      ? datos.motivo.trim()
-      : "";
-
-  if (
-    !Number.isSafeInteger(mascotaId) ||
-    mascotaId <= 0
-  ) {
-    return responder({
-      ok: false,
-      mensaje: "Mascota inválida."
-    }, 400);
-  }
-
-  if (
-    telefono.length < 7 ||
-    telefono.length > 25 ||
-    !/^[+0-9().\s-]+$/.test(telefono) ||
-    (telefono.match(/\d/g) ?? []).length < 7
-  ) {
-    return responder({
-      ok: false,
-      mensaje: "Introduce un teléfono válido."
-    }, 400);
-  }
-
-  if (
-    !["casa", "departamento", "otro"]
-      .includes(vivienda)
-  ) {
-    return responder({
-      ok: false,
-      mensaje: "Selecciona un tipo de vivienda."
-    }, 400);
-  }
-
-  if (
-    motivo.length < 30 ||
-    motivo.length > 1500
-  ) {
-    return responder({
-      ok: false,
-      mensaje:
-        "Explica tu motivación en 30 a 1500 caracteres."
-    }, 400);
-  }
-
-  if (datos.confirmacion !== "si") {
-    return responder({
-      ok: false,
-      mensaje: "Debes confirmar que los datos son correctos."
-    }, 400);
-  }
+  const { mascotaId, telefono, vivienda, motivo } = entrada;
 
   const conexion = await db.connect();
 
@@ -186,13 +114,21 @@ export const POST: APIRoute = async ({
       }, 403);
     }
 
+    const organizacion = await conexion.query(
+      "SELECT estado_cuenta FROM usuarios WHERE id = $1 FOR SHARE", [mascota.usuario_id]
+    );
+    if (organizacion.rows[0]?.estado_cuenta !== "activo") {
+      throw new ReglaAdopcion("La organización está suspendida.", 403);
+    }
+    await comprobarCupo(conexion, usuario.id);
+
     // Una postulación aprobada cierra nuevas
     // solicitudes para esa mascota.
     const aprobada = await conexion.query(
       `SELECT id
        FROM postulaciones
        WHERE mascota_id = $1
-         AND estado = 'aprobada'
+         AND estado = 'aprobada' AND fin_tenencia IS NULL
        LIMIT 1`,
       [mascotaId]
     );
@@ -256,6 +192,7 @@ export const POST: APIRoute = async ({
   } catch (error) {
     await conexion.query("ROLLBACK").catch(() => {});
 
+    if (error instanceof ReglaAdopcion) return responder({ ok: false, mensaje: error.message }, error.status);
     const codigo =
       (error as { code?: string }).code;
 

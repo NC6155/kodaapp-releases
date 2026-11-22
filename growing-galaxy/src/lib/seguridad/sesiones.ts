@@ -21,7 +21,7 @@ export const DURACION_SESION = 60 * 60;
 export async function validarSesion(
   sessionId: string | undefined
 ): Promise<number | null> {
-  if (!sessionId) {
+  if (!sessionId || !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(sessionId)) {
     return null;
   }
 
@@ -30,6 +30,7 @@ export async function validarSesion(
     `UPDATE sesiones
      SET ultima_actividad = NOW()
      WHERE id = $1
+       AND EXISTS (SELECT 1 FROM usuarios u WHERE u.id=sesiones.usuario_id AND u.estado_cuenta='activo')
        AND ultima_actividad >
            NOW() - INTERVAL '60 minutes'
      RETURNING usuario_id`,

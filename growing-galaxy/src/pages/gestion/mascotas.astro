@@ -19,7 +19,7 @@ if (usuario.tipo_usuario !== "organizacion") {
 
 const resultado = await db.query(
   `SELECT
-    id,
+    id, foto_blob,
     nombre,
     descripcion,
     personalidad,
@@ -32,7 +32,7 @@ const resultado = await db.query(
   [usuario.id]
 );
 
-const mascotas = await agregarFotosMascotas(resultado.rows);
+const mascotas = agregarFotosMascotas(resultado.rows);
 ---
 
 <Layout

@@ -6,20 +6,19 @@ import { agregarFotosMascotas } from "../lib/fotos";
 // Datos de las mascotas en KodApp.
 const resultado = await db.query(`
   SELECT
-    id,
+    id, foto_blob,
     nombre,
     descripcion,
     personalidad,
     historial_medico,
     tipo_mascota,
     estado_adopcion
-  FROM mascotas
-  WHERE estado_adopcion = 'disponible'
+  FROM mascotas_postulables
   ORDER BY id DESC
 `);
 
 // Fotografías desde KodApp_Fotos.
-const mascotas = await agregarFotosMascotas(resultado.rows);
+const mascotas = agregarFotosMascotas(resultado.rows);
 ---
 
 <section class="mascotas-disponibles">
@@ -80,6 +79,9 @@ const mascotas = await agregarFotosMascotas(resultado.rows);
                 <div class="mascota-info">
                   <strong>Historial médico</strong>
                   <span>{mascota.historial_medico}</span>
+
+                </div>
+              )}
                   {/* BOTÓN PARA POSTULAR */}
                   <a
                     href={`/postular/${mascota.id}`}
@@ -89,8 +91,6 @@ const mascotas = await agregarFotosMascotas(resultado.rows);
                     <i class="fa-solid fa-clipboard-check"></i>
                     Postular para adoptar
                   </a>
-                </div>
-              )}
             </div>
           </article>
         ))}

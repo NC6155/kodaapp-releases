@@ -29,7 +29,7 @@ const resultado = await db.query(
      p.telefono,
      p.vivienda,
      p.motivo,
-     p.estado,
+     p.estado, p.fin_tenencia,
      p.creada_en,
      p.resuelta_en,
      m.nombre AS mascota_nombre,
@@ -183,6 +183,14 @@ const fecha = (valor: Date | string) =>
                 }
 
                 {
+                  postulacion.estado === "aprobada" && !postulacion.fin_tenencia && (
+                    <form class="post-decision-form" data-postulacion-id={postulacion.id}>
+                      <button type="submit" value="cerrar" class="btn-primary">Cerrar tenencia y liberar cupo</button>
+                    </form>
+                  )
+                }
+                {postulacion.fin_tenencia && <p>Tenencia cerrada el {fecha(postulacion.fin_tenencia)}</p>}
+                {
                   postulacion.estado !== "pendiente" && (
                     <p class="post-date">
                       Evaluada:
@@ -194,6 +202,7 @@ const fecha = (valor: Date | string) =>
                   )
                 }
 
+                <a href={`/reportar/${postulacion.id}`}>Reportar un incidente</a>
               </article>
             ))}
           </div>
@@ -234,14 +243,14 @@ const fecha = (valor: Date | string) =>
 
         if (
           decision !== "aprobar" &&
-          decision !== "rechazar"
+          decision !== "rechazar" && decision !== "cerrar"
         ) {
           return;
         }
 
         const confirmado = window.confirm(
-          decision === "aprobar"
-            ? "¿Seguro que deseas aprobar esta postulación?"
+          decision === "cerrar" ? "¿Registrar el fin de la tenencia y liberar este cupo?" : decision === "aprobar"
+            ? "¿Confirmar la adopción, ocupar un cupo y cerrar las demás solicitudes de esta mascota?"
             : "¿Seguro que deseas rechazar esta postulación?"
         );
 
