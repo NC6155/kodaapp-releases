@@ -22,3 +22,8 @@ pnpm-debug.log*
 
 # jetbrains setting folder
 .idea/
+
+# Archivos de configuración privados
+.env
+.env.*
+env.txt
