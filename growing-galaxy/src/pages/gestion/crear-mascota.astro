@@ -11,6 +11,7 @@ import Layout from "../../layouts/Layout.astro";
 import Header from "../../components/Header.astro";
 import ClasificacionMascota from "../../components/ClasificacionMascota.astro";
 import { getUsuarioDesdeSesion } from "../../lib/auth";
+import SelectorRazaComuna from "../../components/SelectorRazaComuna.astro";
 
 export const prerender = false;
 
@@ -209,81 +210,65 @@ if (usuario.tipo_usuario !== "organizacion") {
             </div>
           </div>
 
-          <div class="form-grid">
 
-            <div class="form-field">
-              <label for="raza">Raza</label>
-              <input
-                type="text"
-                id="raza"
-                name="raza"
-                maxlength="100"
-                placeholder="Ej.: Mestizo"
-              />
-            </div>
+        <div class="form-grid">
 
-            <div class="form-field">
-              <label for="edadMeses">Edad aproximada (meses)</label>
-              <input
-                type="number"
-                id="edadMeses"
-                name="edadMeses"
-                min="0"
-                max="360"
-                step="1"
-                placeholder="Ej.: 18"
-              />
-              <small>12 meses equivalen a un año.</small>
-            </div>
+          <!-- Selección de raza y comuna -->
+          <SelectorRazaComuna tipoId="tipo-mascota" />
 
-            <div class="form-field">
-              <label for="sexo">Sexo</label>
-              <select id="sexo" name="sexo">
-                <option value="desconocido">Sin especificar</option>
-                <option value="macho">Macho</option>
-                <option value="hembra">Hembra</option>
-              </select>
-            </div>
+          <div class="form-field">
+            <label for="edadMeses">Edad aproximada (meses)</label>
+            <input
+              type="number"
+              id="edadMeses"
+              name="edadMeses"
+              min="0"
+              max="360"
+              step="1"
+              placeholder="Ej.: 18"
+            />
+            <small>12 meses equivalen a un año.</small>
+          </div>
 
-            <div class="form-field">
-              <label for="tamano">Tamaño</label>
-              <select id="tamano" name="tamano">
-                <option value="desconocido">Sin especificar</option>
-                <option value="pequeno">Pequeño</option>
-                <option value="mediano">Mediano</option>
-                <option value="grande">Grande</option>
-              </select>
-            </div>
+          <div class="form-field">
+            <label for="sexo">Sexo</label>
+            <select id="sexo" name="sexo">
+              <option value="desconocido">Sin especificar</option>
+              <option value="macho">Macho</option>
+              <option value="hembra">Hembra</option>
+            </select>
+          </div>
 
-            <div class="form-field">
-              <label for="esterilizado">¿Está esterilizada?</label>
-              <select id="esterilizado" name="esterilizado">
-                <option value="desconocido">No se sabe</option>
-                <option value="si">Sí</option>
-                <option value="no">No</option>
-              </select>
-            </div>
+          <div class="form-field">
+            <label for="tamano">Tamaño</label>
+            <select id="tamano" name="tamano">
+              <option value="desconocido">Sin especificar</option>
+              <option value="pequeno">Pequeño</option>
+              <option value="mediano">Mediano</option>
+              <option value="grande">Grande</option>
+            </select>
+          </div>
 
-            <div class="form-field">
-              <label for="vacunasAlDia">¿Tiene las vacunas al día?</label>
-              <select id="vacunasAlDia" name="vacunasAlDia">
-                <option value="desconocido">No se sabe</option>
-                <option value="si">Sí</option>
-                <option value="no">No</option>
-              </select>
-            </div>
+          <div class="form-field">
+            <label for="esterilizado">¿Está esterilizada?</label>
+            <select id="esterilizado" name="esterilizado">
+              <option value="desconocido">No se sabe</option>
+              <option value="si">Sí</option>
+              <option value="no">No</option>
+            </select>
+          </div>
 
-            <div class="form-field form-field-full">
-              <label for="ubicacion">Ubicación</label>
-              <input
-                type="text"
-                id="ubicacion"
-                name="ubicacion"
-                maxlength="120"
-                placeholder="Ej.: Talcahuano"
-              />
-              <small>Indica solo la comuna o sector, no el domicilio exacto.</small>
-            </div>
+          <div class="form-field">
+            <label for="vacunasAlDia">¿Tiene las vacunas al día?</label>
+            <select id="vacunasAlDia" name="vacunasAlDia">
+              <option value="desconocido">No se sabe</option>
+              <option value="si">Sí</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+
+         
+
 
             <div class="form-field form-field-full">
               <label for="requisitosAdopcion">Requisitos de adopción</label>

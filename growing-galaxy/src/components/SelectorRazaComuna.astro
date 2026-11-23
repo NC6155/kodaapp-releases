@@ -1,0 +1,121 @@
+
+---
+import {
+  COMUNAS_POR_PROVINCIA
+} from "../lib/catalogosMascotas";
+
+interface Props {
+  tipoId?: string;
+  razaActual?: string | null;
+  ubicacionActual?: string | null;
+}
+
+const {
+  tipoId = "tipo-mascota",
+  razaActual = "",
+  ubicacionActual = ""
+} = Astro.props;
+---
+
+<div
+  class="form-field"
+  data-selector-raza
+  data-tipo-id={tipoId}
+  data-raza-actual={razaActual ?? ""}
+>
+  <label for="raza">Raza</label>
+
+  <select id="raza" name="raza">
+    <option value="Desconocida">Desconocida</option>
+  </select>
+
+  <small>
+    Las opciones cambian según el tipo de mascota.
+  </small>
+</div>
+
+<div class="form-field">
+  <label for="ubicacion">Comuna</label>
+
+  <select
+    id="ubicacion"
+    name="ubicacion"
+    required
+  >
+    <option value="">Selecciona una comuna</option>
+
+    {Object.entries(COMUNAS_POR_PROVINCIA).map(
+      ([provincia, comunas]) => (
+        <optgroup label={`Provincia de ${provincia}`}>
+          {comunas.map((comuna) => (
+            <option
+              value={comuna}
+              selected={ubicacionActual === comuna}
+            >
+              {comuna}
+            </option>
+          ))}
+        </optgroup>
+      )
+    )}
+  </select>
+
+  <small>
+    Solo se mostrará la comuna, no la dirección exacta.
+  </small>
+</div>
+
+<script>
+  import {
+    RAZAS_POR_TIPO
+  } from "../lib/catalogosMascotas";
+
+  document
+    .querySelectorAll<HTMLElement>("[data-selector-raza]")
+    .forEach((contenedor) => {
+
+      const tipoId = contenedor.dataset.tipoId ??
+        "tipo-mascota";
+
+      const selectTipo =
+        document.getElementById(tipoId) as HTMLSelectElement | null;
+
+      const selectRaza =
+        contenedor.querySelector<HTMLSelectElement>("#raza");
+
+      if (!selectTipo || !selectRaza) return;
+
+      const razaInicial =
+        contenedor.dataset.razaActual ?? "";
+
+      function actualizarRazas(conservar = false) {
+        if (!selectRaza) return;
+
+        const opciones =
+          RAZAS_POR_TIPO[selectTipo.value] ??
+          ["Desconocida", "Otra"];
+
+        const anterior =
+          conservar ? razaInicial : "Desconocida";
+
+        selectRaza.replaceChildren();
+
+        for (const raza of opciones) {
+          selectRaza.add(new Option(raza, raza));
+        }
+
+        if (conservar && anterior && !opciones.includes(anterior)) {
+          selectRaza.add(new Option(anterior, anterior));
+        }
+
+        selectRaza.value =
+          anterior || "Desconocida";
+      }
+
+      actualizarRazas(true);
+
+      selectTipo.addEventListener("change", () => {
+        actualizarRazas(false);
+      });
+    });
+</script>
