@@ -4,6 +4,7 @@ import Layout from "../../layouts/Layout.astro";
 import Header from "../../components/Header.astro";
 import { db } from "../../lib/db";
 import { urlFotoMascota } from "../../lib/fotos";
+import CarruselMascota from "../../components/CarruselMascota.astro";
 
 export const prerender = false;
 
@@ -93,35 +94,16 @@ function mostrarEdad(meses: number | null) {
     <p>Organización: {mascota.organizacion}</p>
 
     <div class="contenido">
-      <section class="panel">
+      
+        <section class="panel">
         <h2>Fotografías</h2>
 
-        {fotos.length > 0 ? (
-          <>
-            <img
-              id="foto-principal"
-              class="imagen-principal"
-              src={fotos[0]}
-              alt={`Fotografía de ${mascota.nombre}`}
-            />
+        <CarruselMascota
+            fotos={fotos}
+            nombre={mascota.nombre}
+        />
+        </section>
 
-            <div class="galeria">
-              {fotos.map((foto, indice) => (
-                <button
-                  type="button"
-                  class="miniatura"
-                  data-foto={foto}
-                  aria-label={`Ver fotografía ${indice + 1}`}
-                >
-                  <img src={foto} alt={`Foto ${indice + 1}`} />
-                </button>
-              ))}
-            </div>
-          </>
-        ) : (
-          <p>No hay fotografías disponibles.</p>
-        )}
-      </section>
 
       <section class="panel">
         <h2>Información general</h2>
@@ -164,18 +146,7 @@ function mostrarEdad(meses: number | null) {
   </main>
 </Layout>
 
-<script>
-  const principal =
-    document.querySelector<HTMLImageElement>("#foto-principal");
 
-  document.querySelectorAll<HTMLButtonElement>(".miniatura")
-    .forEach((boton) => {
-      boton.addEventListener("click", () => {
-        const foto = boton.dataset.foto;
-        if (principal && foto) principal.src = foto;
-      });
-    });
-</script>
 
 <style>
   .ficha {
