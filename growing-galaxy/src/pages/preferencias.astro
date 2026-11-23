@@ -7,6 +7,10 @@
  * Permite crear y editar las preferencias.
  */
 
+import {
+  COMUNAS_POR_PROVINCIA
+} from "../lib/catalogosMascotas";
+
 import Layout from "../layouts/Layout.astro";
 import Header from "../components/Header.astro";
 
@@ -30,15 +34,18 @@ if (usuario.tipo_usuario !== "adoptante") {
   return Astro.redirect("/gestion");
 }
 
+
 const resultado = await db.query(
   `SELECT
      tipo_preferido,
      personalidad_preferida,
-     nivel_cuidados
+     nivel_cuidados,
+     comuna_preferida
    FROM preferencias_match
    WHERE usuario_id = $1`,
   [usuario.id]
 );
+
 
 const preferencias = resultado.rows[0] ?? null;
 
@@ -326,6 +333,62 @@ const bienvenida =
         </section>
 
 
+      <!-- UBICACIÓN PREFERIDA -->
+
+      <section class="form-section">
+        <div class="form-section-header">
+          <span class="form-step">04</span>
+
+          <div>
+            <h2>Ubicación de la mascota</h2>
+            <p>
+              ¿En qué comuna prefieres buscar mascotas
+              disponibles para adopción?
+            </p>
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label for="comunaPreferida">
+            Comuna preferida
+          </label>
+
+          <select
+            id="comunaPreferida"
+            name="comunaPreferida"
+            required
+          >
+            <option value="">
+              Selecciona tu comuna
+            </option>
+
+            {Object.entries(COMUNAS_POR_PROVINCIA).map(
+              ([provincia, comunas]) => (
+                <optgroup label={`Provincia de ${provincia}`}>
+                  {comunas.map((comuna) => (
+                    <option
+                      value={comuna}
+                      selected={
+                        preferencias?.comuna_preferida === comuna
+                      }
+                    >
+                      {comuna}
+                    </option>
+                  ))}
+                </optgroup>
+              )
+            )}
+          </select>
+
+          <small>
+            El Match mostrará primero las mascotas de
+            esta comuna. También podrás ampliar la
+            búsqueda a toda la Región del Biobío.
+          </small>
+        </div>
+      </section>
+
+
         <!-- MENSAJES -->
 
         <p
@@ -410,6 +473,7 @@ const bienvenida =
             headers: {
               "Content-Type": "application/json"
             },
+            
             body: JSON.stringify({
               tipoPreferido:
                 datos.get("tipoPreferido"),
@@ -418,8 +482,12 @@ const bienvenida =
                 datos.get("personalidadPreferida"),
 
               nivelCuidados:
-                datos.get("nivelCuidados")
+                datos.get("nivelCuidados"),
+
+              comunaPreferida:
+                datos.get("comunaPreferida")
             })
+
           }
         );
 

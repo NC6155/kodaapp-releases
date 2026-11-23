@@ -4,6 +4,7 @@ import type { APIRoute } from "astro";
 import { db } from "../../../lib/db";
 import { getUsuarioDesdeSesion } from "../../../lib/auth";
 import { PERSONALIDADES } from "../../../lib/CatalogoMatch";
+import { COMUNAS_BIOBIO } from "../../../lib/catalogosMascotas";
 
 export const prerender = false;
 
@@ -88,6 +89,20 @@ export const POST: APIRoute = async ({
     const nivelCuidados = datos.nivelCuidados;
 
 
+    const comunaPreferida = datos.comunaPreferida;
+
+    if (
+      typeof comunaPreferida !== "string" ||
+      !COMUNAS_BIOBIO.includes(comunaPreferida)
+    ) {
+      return responder({
+        ok: false,
+        mensaje: "Selecciona una comuna válida del Biobío."
+      }, 400);
+    }
+
+
+
     // VALIDACIONES
 
     if (
@@ -136,28 +151,34 @@ export const POST: APIRoute = async ({
 
     // GUARDAR O ACTUALIZAR
 
-    await db.query(
-      `INSERT INTO preferencias_match (
-        usuario_id,
-        tipo_preferido,
-        personalidad_preferida,
-        nivel_cuidados
-      )
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (usuario_id)
-      DO UPDATE SET
-        tipo_preferido = EXCLUDED.tipo_preferido,
-        personalidad_preferida =
-          EXCLUDED.personalidad_preferida,
-        nivel_cuidados = EXCLUDED.nivel_cuidados,
-        actualizada_en = NOW()`,
-      [
-        usuario.id,
-        tipoPreferido,
-        personalidadPreferida,
-        nivelCuidados
-      ]
-    );
+    
+      await db.query(
+        `INSERT INTO preferencias_match (
+          usuario_id,
+          tipo_preferido,
+          personalidad_preferida,
+          nivel_cuidados,
+          comuna_preferida
+        )
+        VALUES ($1, $2, $3, $4, $5)
+
+        ON CONFLICT (usuario_id)
+        DO UPDATE SET
+          tipo_preferido = EXCLUDED.tipo_preferido,
+          personalidad_preferida =
+            EXCLUDED.personalidad_preferida,
+          nivel_cuidados = EXCLUDED.nivel_cuidados,
+          comuna_preferida = EXCLUDED.comuna_preferida,
+          actualizada_en = NOW()`,
+        [
+          usuario.id,
+          tipoPreferido,
+          personalidadPreferida,
+          nivelCuidados,
+          comunaPreferida
+        ]
+      );
+
 
     return responder({
       ok: true,
