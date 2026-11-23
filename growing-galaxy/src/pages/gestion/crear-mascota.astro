@@ -12,6 +12,7 @@ import Header from "../../components/Header.astro";
 import ClasificacionMascota from "../../components/ClasificacionMascota.astro";
 import { getUsuarioDesdeSesion } from "../../lib/auth";
 import SelectorRazaComuna from "../../components/SelectorRazaComuna.astro";
+import GaleriaFormulario from "../../components/GaleriaFormulario.astro";
 
 export const prerender = false;
 
@@ -285,43 +286,9 @@ if (usuario.tipo_usuario !== "organizacion") {
         </section>
 
         <!-- GALERÍA DE FOTOGRAFÍAS -->
-
-        <section class="form-section">
-          <div class="form-section-header">
-            <span class="form-step">06</span>
-            <div>
-              <h2>Galería de fotografías</h2>
-              <p>Agrega otras fotografías desde diferentes ángulos.</p>
-            </div>
-          </div>
-
-          <div class="form-field">
-            <label for="galeria">Fotografías adicionales</label>
-
-            <input
-              type="file"
-              id="galeria"
-              name="galeria"
-              accept="image/jpeg,image/png,image/webp"
-              multiple
-            />
-
-            <small>
-              Hasta 4 fotografías adicionales, de máximo 5 MB cada una.
-              Formatos JPG, PNG o WebP.
-            </small>
-
-            <div
-              id="galeria-preview"
-              class="galeria-preview"
-              aria-live="polite"
-            ></div>
-          </div>
-        </section>
+        <GaleriaFormulario />
 
         
-
-
         <!-- MENSAJES -->
 
         <p
