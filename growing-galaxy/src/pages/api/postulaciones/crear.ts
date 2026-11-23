@@ -81,6 +81,7 @@ export const POST: APIRoute = async ({
       `SELECT id, usuario_id, estado_adopcion
        FROM mascotas
        WHERE id = $1
+        AND publicada = TRUE
        FOR UPDATE`,
       [mascotaId]
     );
@@ -128,7 +129,7 @@ export const POST: APIRoute = async ({
       `SELECT id
        FROM postulaciones
        WHERE mascota_id = $1
-         AND estado = 'aprobada' AND fin_tenencia IS NULL
+         AND estado = 'aprobada' AND fin_tenencia IS NULL 
        LIMIT 1`,
       [mascotaId]
     );

@@ -26,7 +26,8 @@ const resultado = await db.query(
    FROM mascotas m
    JOIN usuarios u ON u.id = m.usuario_id
    WHERE m.id = $1
-     AND u.estado_cuenta = 'activo'`,
+     AND u.estado_cuenta = 'activo'
+     AND m.publicada = TRUE`,
   [id]
 );
 

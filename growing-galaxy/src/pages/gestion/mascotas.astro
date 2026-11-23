@@ -19,13 +19,15 @@ if (usuario.tipo_usuario !== "organizacion") {
 
 const resultado = await db.query(
   `SELECT
-    id, foto_blob,
+    id, 
+    foto_blob,
     nombre,
     descripcion,
     personalidad,
     historial_medico,
     estado_adopcion,
     tipo_mascota
+    publicada
    FROM mascotas
    WHERE usuario_id = $1
    ORDER BY id DESC`,
@@ -123,7 +125,7 @@ const mascotas = agregarFotosMascotas(resultado.rows);
                         mascota.estado_adopcion === "disponible"
                     }}
                   >
-                    {mascota.estado_adopcion}
+                    {mascota.publicada ? mascota.estado_adopcion : "Oculta"}
                   </span>
 
                 </div>
