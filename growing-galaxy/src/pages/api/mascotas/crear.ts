@@ -5,6 +5,11 @@ import { db } from "../../../lib/db";
 import { getUsuarioDesdeSesion } from "../../../lib/auth";
 
 import {
+  COMUNAS_BIOBIO,
+  RAZAS_POR_TIPO
+} from "../../../lib/catalogosMascotas";
+
+import {
   validarImagen,
   subirImagen,
   borrarImagen,
@@ -106,6 +111,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     }
 
     // Información adicional de la ficha
+
     const raza = String(datos.get("raza") ?? "").trim();
     const edadTexto = String(datos.get("edadMeses") ?? "").trim();
     const sexo = String(datos.get("sexo") ?? "desconocido");
@@ -124,37 +130,45 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       datos.get("vacunasAlDia") ?? "desconocido"
     );
 
-    if (raza.length > 100 || ubicacion.length > 120 || requisitos.length > 2000) {
+    // ====================================
+    // VALIDAR LONGITUD DE LOS CAMPOS
+    // ====================================
+
+    if (
+      raza.length > 100 ||
+      ubicacion.length > 120 ||
+      requisitos.length > 2000
+    ) {
       return responder({
         ok: false,
         mensaje: "Raza, ubicación o requisitos demasiado largos."
       }, 400);
     }
 
-    const edadMeses = edadTexto === "" ? null : Number(edadTexto);
+    // ====================================
+    // VALIDAR COMUNA
+    // ====================================
 
-    if (
-      edadTexto !== "" &&
-      (!/^\d+$/.test(edadTexto) || edadMeses === null ||
-       !Number.isInteger(edadMeses) || edadMeses > 360)
-    ) {
+    if (!COMUNAS_BIOBIO.includes(ubicacion)) {
       return responder({
         ok: false,
-        mensaje: "La edad debe estar entre 0 y 360 meses."
+        mensaje: "Selecciona una comuna válida de la Región del Biobío."
       }, 400);
     }
 
-    if (
-      !["macho", "hembra", "desconocido"].includes(sexo) ||
-      !["pequeno", "mediano", "grande", "desconocido"].includes(tamano) ||
-      !["si", "no", "desconocido"].includes(esterilizadoTexto) ||
-      !["si", "no", "desconocido"].includes(vacunasTexto)
-    ) {
+    // ====================================
+    // VALIDAR RAZA SEGÚN TIPO DE MASCOTA
+    // ====================================
+
+    const razasPermitidas = RAZAS_POR_TIPO[tipo] ?? [];
+
+    if (!razasPermitidas.includes(raza)) {
       return responder({
         ok: false,
-        mensaje: "Revisa las características de la mascota."
+        mensaje: "Selecciona una raza válida para el tipo de mascota."
       }, 400);
     }
+
 
     const convertirBooleano = (valor: string): boolean | null => {
       if (valor === "si") return true;
