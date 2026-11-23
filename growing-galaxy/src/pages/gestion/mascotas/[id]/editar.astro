@@ -353,7 +353,7 @@ const mascota = mascotas[0];
             class="btn-eliminar-publicacion"
           >
             <i class="fa-solid fa-trash"></i>
-            Eliminar publicación
+            Ocultar publicación
           </button>
 
           <a
@@ -528,9 +528,9 @@ const mascota = mascotas[0];
     }
 
     const confirmado = window.confirm(
-      "¿Estás seguro de eliminar esta publicación?\n\n" +
-      "También se eliminará su fotografía.\n" +
-      "Esta acción no se puede deshacer."
+      "¿Quieres ocultar esta mascota del catálogo?\n\n" +
+      "No aparecerá en Mascotas disponibles ni en Match.\n" +
+      "Las postulaciones, los datos y las fotografías se conservarán para consevar el historial"
     );
 
     if (!confirmado) {
@@ -543,7 +543,7 @@ const mascota = mascotas[0];
       botonGuardar.disabled = true;
     }
 
-    mensaje.textContent = "Eliminando publicación...";
+    mensaje.textContent = "Ocultando publicación...";
 
     try {
       const respuesta = await fetch(

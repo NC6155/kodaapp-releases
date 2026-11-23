@@ -3,7 +3,6 @@ import type { APIRoute } from "astro";
 
 import { db } from "../../../lib/db";
 import { getUsuarioDesdeSesion } from "../../../lib/auth";
-import { borrarImagen } from "../../../lib/azure";
 
 export const prerender = false;
 
