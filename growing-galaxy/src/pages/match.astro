@@ -312,6 +312,11 @@ function mensajeNivel(
               Mis preferencias
             </a>
           </div>
+          
+          <a class="ka-match-edit" href="/favoritos">
+            <i class="fa-solid fa-heart"></i>
+            Mis favoritas
+          </a>
 
           {tarjetas.length === 0 ? (
             <section class="ka-match-empty">
@@ -582,11 +587,17 @@ function mensajeNivel(
                   class="ka-match-control ka-match-control--like"
                   id="ka-match-like"
                   type="button"
-                  aria-label="Me gusta esta mascota y continuar"
+                  aria-label="Guardar mascota en favoritos y continuar"
                 >
                   <i class="fa-solid fa-heart"></i>
                 </button>
               </div>
+              <p
+                  id="ka-match-save-message"
+                  class="ka-match-note"
+                  role="status"
+                  aria-live="polite"
+              ></p>
 
               <p class="ka-match-hint">
                 <i class="fa-solid fa-hand-pointer"></i>
@@ -596,9 +607,8 @@ function mensajeNivel(
               </p>
 
               <p class="ka-match-note" role="note">
-                El corazón solo avanza a la siguiente mascota.
-                Para iniciar una solicitud, pulsa
-                <strong>Conocer y postular</strong>.
+                <strong>El corazón guarda la mascota en favoritos.</strong>
+                Podrás revisar tus favoritas y postular más adelante.
               </p>
             </section>
           )}
@@ -652,6 +662,9 @@ function mensajeNivel(
 
     const restart =
       document.querySelector<HTMLButtonElement>('#ka-match-restart');
+      
+    const saveMessage =
+      document.querySelector<HTMLElement>('#ka-match-save-message');
 
     let current = 0;
     let busy = false;
@@ -727,23 +740,83 @@ function mensajeNivel(
     // DESLIZAR IZQUIERDA O DERECHA
     // =====================================
 
-    const swipe = (direction: -1 | 1) => {
+    
+    const swipe = async (direction: -1 | 1) => {
       if (busy || current >= cards.length) return;
 
       const card = cards[current];
 
+      // Si desliza a la derecha o pulsa corazón,
+      // guardar primero en PostgreSQL.
+      if (direction === 1) {
+        busy = true;
+
+        if (saveMessage) {
+          saveMessage.textContent = "Guardando mascota...";
+        }
+
+        try {
+          const respuesta = await fetch("/api/favoritos", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              accion: "guardar",
+              mascotaId: Number(card.dataset.petId)
+            })
+          });
+
+          const resultado = await respuesta.json().catch(
+            () => null
+          );
+
+          if (respuesta.status === 401) {
+            window.location.href = "/login";
+            return;
+          }
+
+          if (!respuesta.ok || !resultado?.ok) {
+            throw new Error(
+              resultado?.mensaje || "No se pudo guardar."
+            );
+          }
+
+          if (saveMessage) {
+            saveMessage.textContent =
+              "¡Guardada! Puedes postular desde Mis favoritas.";
+          }
+
+        } catch (error) {
+          busy = false;
+
+          if (saveMessage) {
+            saveMessage.textContent =
+              error instanceof Error
+                ? error.message
+                : "Error al guardar la mascota.";
+          }
+
+          // Mantener la tarjeta si falla el guardado.
+          paint();
+          return;
+        }
+      }
+
+      // Avanzar a la siguiente tarjeta.
       busy = true;
 
-      card.classList.remove('is-dragging');
-      card.classList.add('is-leaving');
+      card.classList.remove("is-dragging");
+      card.classList.add("is-leaving");
 
       card.style.transform =
         `translate3d(${direction * Math.max(window.innerWidth, 600)}px,-45px,0) rotate(${direction * 18}deg)`;
 
-      card.style.opacity = '0';
+      card.style.opacity = "0";
 
       window.setTimeout(() => {
-        card.classList.remove('is-leaving');
+        card.classList.remove("is-leaving");
 
         current += 1;
         busy = false;
@@ -751,6 +824,7 @@ function mensajeNivel(
         paint();
       }, 270);
     };
+
 
     // =====================================
     // RESTABLECER POSICIÓN DE TARJETA
