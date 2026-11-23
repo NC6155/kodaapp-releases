@@ -67,13 +67,16 @@ export const DELETE: APIRoute = async ({
       }, 400);
     }
 
+    
     const resultado = await db.query(
-      `DELETE FROM mascotas
-       WHERE id = $1
-         AND usuario_id = $2
-       RETURNING foto_blob`,
+      `UPDATE mascotas
+      SET publicada = FALSE
+      WHERE id = $1
+        AND usuario_id = $2
+      RETURNING id`,
       [id, usuario.id]
     );
+
 
     if (!resultado.rows.length) {
       return responder({
@@ -82,29 +85,9 @@ export const DELETE: APIRoute = async ({
       }, 404);
     }
 
-    try {
-      await borrarImagen(
-        resultado.rows[0].foto_blob
-      );
-
-    } catch (error) {
-      console.error(
-        "Publicación borrada, pero falló limpieza en Azure:",
-        error
-      );
-
-      return responder({
-        ok: true,
-        advertencia: true,
-        mensaje:
-          "Publicación eliminada. No se pudo limpiar " +
-          "su imagen de Azure."
-      });
-    }
-
     return responder({
       ok: true,
-      mensaje: "Publicación eliminada correctamente."
+      mensaje: "La Publicación fue ocultada correctamente."
     });
 
   } catch (error) {
