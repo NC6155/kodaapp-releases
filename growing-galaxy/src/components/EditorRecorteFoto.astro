@@ -1,0 +1,526 @@
+
+---
+interface Props {
+  inputId: string;
+  previewId: string;
+  forma?: "circulo" | "cuadrado";
+}
+
+const {
+  inputId,
+  previewId,
+  forma = "cuadrado"
+} = Astro.props;
+
+const tituloId = `titulo-recorte-${inputId}`;
+---
+
+<div
+  class="ka-editor-recorte"
+  data-editor-recorte
+  data-input-id={inputId}
+  data-preview-id={previewId}
+>
+  <dialog class="ka-editor-dialog" aria-labelledby={tituloId}>
+
+    <h2 id={tituloId}>Ajustar fotografía</h2>
+
+    <p class="ka-editor-ayuda">
+      Arrastra la imagen para centrarla y utiliza
+      el control para ampliar o reducir el encuadre.
+    </p>
+
+    <div class="ka-editor-visor">
+      <canvas
+        width="360"
+        height="360"
+        data-lienzo
+        class:list={{
+          "ka-editor-canvas": true,
+          "es-circulo": forma === "circulo"
+        }}
+        aria-label="Vista previa del recorte"
+      ></canvas>
+    </div>
+
+    <label class="ka-editor-zoom">
+      <span>Zoom</span>
+      <input
+        type="range"
+        min="1"
+        max="3"
+        step="0.05"
+        value="1"
+        data-zoom
+      />
+      <span data-zoom-valor>1.00x</span>
+    </label>
+
+    <div class="ka-editor-acciones">
+      <button type="button" data-cancelar>
+        Cancelar
+      </button>
+
+      <button type="button" data-confirmar>
+        <i class="fa-solid fa-check"></i>
+        Aplicar recorte
+      </button>
+    </div>
+
+  </dialog>
+
+  <p class="ka-editor-error" data-error role="alert"></p>
+</div>
+
+<script>
+  const TAMANO_VISTA = 360;
+  const TAMANO_SALIDA = 900;
+  const MAX_BYTES = 5 * 1024 * 1024;
+
+  document
+    .querySelectorAll<HTMLElement>("[data-editor-recorte]")
+    .forEach((editor) => {
+
+      const entrada = document.getElementById(
+        editor.dataset.inputId ?? ""
+      ) as HTMLInputElement | null;
+
+      const vistaPrevia = document.getElementById(
+        editor.dataset.previewId ?? ""
+      );
+
+      const dialogo =
+        editor.querySelector<HTMLDialogElement>("dialog");
+
+      const lienzo =
+        editor.querySelector<HTMLCanvasElement>("[data-lienzo]");
+
+      const zoomInput =
+        editor.querySelector<HTMLInputElement>("[data-zoom]");
+
+      const zoomValor =
+        editor.querySelector<HTMLElement>("[data-zoom-valor]");
+
+      const cancelar =
+        editor.querySelector<HTMLButtonElement>("[data-cancelar]");
+
+      const confirmar =
+        editor.querySelector<HTMLButtonElement>("[data-confirmar]");
+
+      const error =
+        editor.querySelector<HTMLElement>("[data-error]");
+
+      const contexto = lienzo?.getContext("2d");
+
+      if (
+        !entrada ||
+        !vistaPrevia ||
+        !dialogo ||
+        !lienzo ||
+        !zoomInput ||
+        !contexto ||
+        !confirmar
+      ) {
+        return;
+      }
+
+      let imagen: HTMLImageElement | null = null;
+      let zoom = 1;
+      let desplazamientoX = 0;
+      let desplazamientoY = 0;
+
+      let arrastrando = false;
+      let ultimoX = 0;
+      let ultimoY = 0;
+
+      // Último recorte aceptado. Si el usuario
+      // cancela otro recorte, se conserva.
+      let ultimoArchivo: File | null = null;
+
+      function mensaje(texto: string) {
+        if (error) error.textContent = texto;
+      }
+
+      function restaurarArchivo() {
+        const transferencia = new DataTransfer();
+
+        if (ultimoArchivo) {
+          transferencia.items.add(ultimoArchivo);
+        }
+
+        entrada!.files = transferencia.files;
+      }
+
+      function dimensiones() {
+        if (!imagen) return null;
+
+        const escalaBase = Math.max(
+          TAMANO_VISTA / imagen.naturalWidth,
+          TAMANO_VISTA / imagen.naturalHeight
+        );
+
+        const ancho =
+          imagen.naturalWidth * escalaBase * zoom;
+
+        const alto =
+          imagen.naturalHeight * escalaBase * zoom;
+
+        return { ancho, alto };
+      }
+
+      function limitarPosicion() {
+        const tamano = dimensiones();
+        if (!tamano) return;
+
+        const maxX = Math.max(
+          0,
+          (tamano.ancho - TAMANO_VISTA) / 2
+        );
+
+        const maxY = Math.max(
+          0,
+          (tamano.alto - TAMANO_VISTA) / 2
+        );
+
+        desplazamientoX = Math.max(
+          -maxX,
+          Math.min(maxX, desplazamientoX)
+        );
+
+        desplazamientoY = Math.max(
+          -maxY,
+          Math.min(maxY, desplazamientoY)
+        );
+      }
+
+      function dibujar(
+        destino: CanvasRenderingContext2D,
+        lado: number
+      ) {
+        if (!imagen) return;
+
+        const tamano = dimensiones();
+        if (!tamano) return;
+
+        const factor = lado / TAMANO_VISTA;
+
+        const ancho = tamano.ancho * factor;
+        const alto = tamano.alto * factor;
+
+        destino.clearRect(0, 0, lado, lado);
+        destino.fillStyle = "#ffffff";
+        destino.fillRect(0, 0, lado, lado);
+
+        destino.drawImage(
+          imagen,
+          (lado - ancho) / 2 + desplazamientoX * factor,
+          (lado - alto) / 2 + desplazamientoY * factor,
+          ancho,
+          alto
+        );
+      }
+
+      function actualizar() {
+        limitarPosicion();
+
+        dibujar(contexto!, TAMANO_VISTA);
+
+        if (zoomValor) {
+          zoomValor.textContent = `${zoom.toFixed(2)}x`;
+        }
+      }
+
+      // Al seleccionar la fotografía, abrir editor.
+      entrada.addEventListener("change", () => {
+        const archivo = entrada.files?.[0];
+
+        if (!archivo) return;
+
+        mensaje("");
+
+        if (
+          !["image/jpeg", "image/png", "image/webp"]
+            .includes(archivo.type) ||
+          archivo.size === 0 ||
+          archivo.size > MAX_BYTES
+        ) {
+          mensaje(
+            "Selecciona un archivo JPG, PNG o WebP de máximo 5 MB."
+          );
+          restaurarArchivo();
+          return;
+        }
+
+        const url = URL.createObjectURL(archivo);
+        const nuevaImagen = new Image();
+
+        nuevaImagen.onload = () => {
+          URL.revokeObjectURL(url);
+
+          if (
+            !nuevaImagen.naturalWidth ||
+            !nuevaImagen.naturalHeight
+          ) {
+            mensaje("La fotografía no se pudo abrir.");
+            restaurarArchivo();
+            return;
+          }
+
+          imagen = nuevaImagen;
+          zoom = 1;
+          desplazamientoX = 0;
+          desplazamientoY = 0;
+
+          zoomInput.value = "1";
+
+          actualizar();
+          dialogo.showModal();
+        };
+
+        nuevaImagen.onerror = () => {
+          URL.revokeObjectURL(url);
+          mensaje("No se pudo leer la imagen seleccionada.");
+          restaurarArchivo();
+        };
+
+        nuevaImagen.src = url;
+      });
+
+      // Mover imagen con mouse o pantalla táctil.
+      lienzo.addEventListener("pointerdown", (evento) => {
+        if (!imagen) return;
+
+        arrastrando = true;
+        ultimoX = evento.clientX;
+        ultimoY = evento.clientY;
+
+        lienzo.setPointerCapture(evento.pointerId);
+      });
+
+      lienzo.addEventListener("pointermove", (evento) => {
+        if (!arrastrando) return;
+
+        const rect = lienzo.getBoundingClientRect();
+        const factor = TAMANO_VISTA / rect.width;
+
+        desplazamientoX +=
+          (evento.clientX - ultimoX) * factor;
+
+        desplazamientoY +=
+          (evento.clientY - ultimoY) * factor;
+
+        ultimoX = evento.clientX;
+        ultimoY = evento.clientY;
+
+        actualizar();
+      });
+
+      const terminarArrastre = () => {
+        arrastrando = false;
+      };
+
+      lienzo.addEventListener("pointerup", terminarArrastre);
+      lienzo.addEventListener("pointercancel", terminarArrastre);
+      lienzo.addEventListener("lostpointercapture", terminarArrastre);
+
+      // Control de ampliación.
+      zoomInput.addEventListener("input", () => {
+        zoom = Number(zoomInput.value);
+        actualizar();
+      });
+
+      cancelar?.addEventListener("click", () => {
+        dialogo.close();
+      });
+
+      // Restaurar selección al cancelar o pulsar Escape.
+      dialogo.addEventListener("close", () => {
+        restaurarArchivo();
+        arrastrando = false;
+        imagen = null;
+      });
+
+      // Crear fotografía recortada.
+      confirmar.addEventListener("click", async () => {
+        if (!imagen) return;
+
+        confirmar.disabled = true;
+
+        try {
+          const salida = document.createElement("canvas");
+
+          salida.width = TAMANO_SALIDA;
+          salida.height = TAMANO_SALIDA;
+
+          const ctxSalida = salida.getContext("2d");
+
+          if (!ctxSalida) {
+            throw new Error("No se pudo preparar el recorte.");
+          }
+
+          dibujar(ctxSalida, TAMANO_SALIDA);
+
+          const blob = await new Promise<Blob | null>(
+            (resolver) => {
+              salida.toBlob(
+                resolver,
+                "image/jpeg",
+                0.9
+              );
+            }
+          );
+
+          if (!blob || blob.size > MAX_BYTES) {
+            throw new Error(
+              "No se pudo generar la fotografía. Prueba con otra imagen."
+            );
+          }
+
+          const fotoRecortada = new File(
+            [blob],
+            `foto-recortada-${Date.now()}.jpg`,
+            { type: "image/jpeg" }
+          );
+
+          // El archivo recortado reemplaza el original
+          // que enviará FormData a la API.
+          ultimoArchivo = fotoRecortada;
+          restaurarArchivo();
+
+          // Actualizar vista previa.
+          const imagenPreview = document.createElement("img");
+          const urlPreview = URL.createObjectURL(fotoRecortada);
+
+          imagenPreview.src = urlPreview;
+          imagenPreview.alt = "Fotografía ajustada";
+
+          imagenPreview.onload = () => {
+            URL.revokeObjectURL(urlPreview);
+          };
+
+          vistaPrevia.replaceChildren(imagenPreview);
+
+          dialogo.close();
+
+          // Avisar a otros scripts cuando termina el recorte.
+          entrada.dispatchEvent(
+            new CustomEvent("kodapp:foto-recortada", {
+              bubbles: true
+            })
+          );
+
+        } catch (e) {
+          mensaje(
+            e instanceof Error
+              ? e.message
+              : "No se pudo recortar la fotografía."
+          );
+        } finally {
+          confirmar.disabled = false;
+        }
+      });
+    });
+</script>
+
+<style>
+  .ka-editor-dialog {
+    width: min(94vw, 490px);
+    max-height: 92vh;
+    overflow-y: auto;
+    padding: 24px;
+    border: 1px solid #556272;
+    border-radius: 18px;
+    background: #222c37;
+    color: #ffffff;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+  }
+
+  .ka-editor-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.78);
+  }
+
+  .ka-editor-dialog h2 {
+    margin: 0 0 10px;
+  }
+
+  .ka-editor-ayuda {
+    margin-bottom: 20px;
+    color: #c5cbd4;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .ka-editor-visor {
+    display: flex;
+    justify-content: center;
+  }
+
+  .ka-editor-canvas {
+    display: block;
+    width: min(100%, 360px);
+    height: auto;
+    aspect-ratio: 1;
+    border: 2px solid #f59e0b;
+    border-radius: 12px;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .ka-editor-canvas:active {
+    cursor: grabbing;
+  }
+
+  .ka-editor-canvas.es-circulo {
+    border-radius: 50%;
+  }
+
+  .ka-editor-zoom {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin: 22px 0;
+  }
+
+  .ka-editor-zoom input {
+    flex: 1;
+    min-width: 0;
+    accent-color: #f59e0b;
+  }
+
+  .ka-editor-zoom span {
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .ka-editor-acciones {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+
+  .ka-editor-acciones button {
+    padding: 11px 15px;
+    border-radius: 9px;
+    border: 1px solid #687789;
+    background: #394657;
+    color: white;
+    cursor: pointer;
+  }
+
+  .ka-editor-acciones [data-confirmar] {
+    background: #f59e0b;
+    color: #151515;
+    border-color: #f59e0b;
+    font-weight: bold;
+  }
+
+  .ka-editor-acciones button:disabled {
+    opacity: 0.5;
+  }
+
+  .ka-editor-error {
+    margin: 8px 0 0;
+    color: #ff9ea8;
+    font-size: 13px;
+  }
+</style>

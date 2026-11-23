@@ -15,6 +15,7 @@ import { getUsuarioDesdeSesion } from "../../../../lib/auth";
 import { agregarFotosMascotas } from "../../../../lib/fotos";
 import SelectorRazaComuna from "../../../../components/SelectorRazaComuna.astro";
 import GaleriaFormulario from "../../../../components/GaleriaFormulario.astro";
+import EditorRecorteFoto from "../../../../components/EditorRecorteFoto.astro";
 
 export const prerender = false;
 
@@ -188,6 +189,11 @@ const fotosGaleria = resultadoGaleria.rows as {
               type="file"
               accept="image/jpeg,image/png,image/webp"
               hidden
+            />
+            <EditorRecorteFoto
+              inputId="foto"
+              previewId="preview-container"
+              forma="cuadrado"
             />
 
             <small>
@@ -594,15 +600,6 @@ const fotosGaleria = resultadoGaleria.rows as {
       "#editar-mascota-form"
     );
 
-  const fotoInput =
-    document.querySelector<HTMLInputElement>(
-      "#foto"
-    );
-
-  const preview =
-    document.querySelector<HTMLElement>(
-      "#preview-container"
-    );
 
   const mensaje =
     document.querySelector<HTMLElement>(
@@ -624,36 +621,7 @@ const fotosGaleria = resultadoGaleria.rows as {
   // VISTA PREVIA DE LA FOTO
   // ==========================================
 
-  fotoInput?.addEventListener("change", () => {
-    const archivo = fotoInput.files?.[0];
 
-    if (!archivo || !preview) return;
-
-    if (
-      !["image/jpeg", "image/png", "image/webp"]
-        .includes(archivo.type) ||
-      archivo.size > 5 * 1024 * 1024
-    ) {
-      alert(
-        "Selecciona una imagen JPG, PNG o WebP de hasta 5 MB."
-      );
-
-      fotoInput.value = "";
-      return;
-    }
-
-    const url = URL.createObjectURL(archivo);
-    const imagen = document.createElement("img");
-
-    imagen.src = url;
-    imagen.alt = "Nueva fotografía";
-
-    imagen.onload = () => {
-      URL.revokeObjectURL(url);
-    };
-
-    preview.replaceChildren(imagen);
-  });
 
 
   // ==========================================

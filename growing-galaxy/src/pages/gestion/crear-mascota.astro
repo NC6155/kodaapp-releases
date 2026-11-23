@@ -13,6 +13,7 @@ import ClasificacionMascota from "../../components/ClasificacionMascota.astro";
 import { getUsuarioDesdeSesion } from "../../lib/auth";
 import SelectorRazaComuna from "../../components/SelectorRazaComuna.astro";
 import GaleriaFormulario from "../../components/GaleriaFormulario.astro";
+import EditorRecorteFoto from "../../components/EditorRecorteFoto.astro";
 
 export const prerender = false;
 
@@ -104,6 +105,11 @@ if (usuario.tipo_usuario !== "organizacion") {
               name="foto"
               accept="image/jpeg,image/png,image/webp"
               hidden
+            />
+            <EditorRecorteFoto
+              inputId="foto"
+              previewId="preview-container"
+              forma="cuadrado"
             />
 
             <small>
@@ -330,15 +336,7 @@ if (usuario.tipo_usuario !== "organizacion") {
       "#mascota-form"
     );
 
-  const photoInput =
-    document.querySelector<HTMLInputElement>(
-      "#foto"
-    );
 
-  const previewContainer =
-    document.querySelector<HTMLElement>(
-      "#preview-container"
-    );
 
   const message =
     document.querySelector<HTMLElement>(
@@ -355,43 +353,6 @@ if (usuario.tipo_usuario !== "organizacion") {
   // VISTA PREVIA DE LA FOTO
   // ==========================================
 
-  photoInput?.addEventListener("change", () => {
-    const archivo = photoInput.files?.[0];
-
-    if (!archivo || !previewContainer) {
-      return;
-    }
-
-    const tiposPermitidos = [
-      "image/jpeg",
-      "image/png",
-      "image/webp"
-    ];
-
-    if (
-      !tiposPermitidos.includes(archivo.type) ||
-      archivo.size > 5 * 1024 * 1024
-    ) {
-      alert(
-        "Selecciona una imagen JPG, PNG o WebP de hasta 5 MB."
-      );
-
-      photoInput.value = "";
-      return;
-    }
-
-    const url = URL.createObjectURL(archivo);
-    const imagen = document.createElement("img");
-
-    imagen.src = url;
-    imagen.alt = "Vista previa de la mascota";
-
-    imagen.onload = () => {
-      URL.revokeObjectURL(url);
-    };
-
-    previewContainer.replaceChildren(imagen);
-  });
 
 // ==========================================
 // VISTA PREVIA DE LA GALERÍA
