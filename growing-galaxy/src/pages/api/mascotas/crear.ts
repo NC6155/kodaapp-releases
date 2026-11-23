@@ -113,7 +113,32 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     // Información adicional de la ficha
 
     const raza = String(datos.get("raza") ?? "").trim();
+
+// Obtener la edad ingresada en el formulario.
     const edadTexto = String(datos.get("edadMeses") ?? "").trim();
+
+    // Convertir a número o dejar null si no se ingresó.
+    const edadMeses =
+      edadTexto === "" ? null : Number(edadTexto);
+
+    // Validar que sea un número entero entre 0 y 360.
+    if (
+      edadTexto !== "" &&
+      (
+        !/^\d+$/.test(edadTexto) ||
+        edadMeses === null ||
+        !Number.isInteger(edadMeses) ||
+        edadMeses < 0 ||
+        edadMeses > 360
+      )
+    ) {
+      return responder({
+        ok: false,
+        mensaje: "La edad debe estar entre 0 y 360 meses."
+      }, 400);
+    }
+
+    
     const sexo = String(datos.get("sexo") ?? "desconocido");
     const tamano = String(datos.get("tamano") ?? "desconocido");
     const ubicacion = String(datos.get("ubicacion") ?? "").trim();

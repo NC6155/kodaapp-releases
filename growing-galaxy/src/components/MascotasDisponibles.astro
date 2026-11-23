@@ -59,7 +59,6 @@ const tamano = filtro(
   ["pequeno", "mediano", "grande", "desconocido"]
 );
 
-const vacunas = filtro("vacunas", ["si", "no"]);
 
 const esterilizado = filtro(
   "esterilizado",
@@ -93,11 +92,8 @@ const resultado = await db.query(
      AND ($6::text = '' OR m.tamano = $6)
      AND (
        $7::text = '' OR
-       m.vacunas_al_dia = ($7::text = 'si')
-     )
-     AND (
-       $8::text = '' OR
-       m.esterilizado = ($8::text = 'si')
+       m.esterilizado = ($7::text = 'si')  
+       
      )
    ORDER BY m.id DESC`,
   [
@@ -107,7 +103,6 @@ const resultado = await db.query(
     personalidad,
     cuidado,
     tamano,
-    vacunas,
     esterilizado
   ]
 );
@@ -116,7 +111,7 @@ const mascotas = agregarFotosMascotas(resultado.rows);
 
 const hayFiltros = [
   tipo, comuna, raza, personalidad,
-  cuidado, tamano, vacunas, esterilizado
+  cuidado, tamano, esterilizado
 ].some(Boolean);
 ---
 
@@ -239,15 +234,6 @@ const hayFiltros = [
           <option value="otro" selected={cuidado === "otro"}>
             Otro
           </option>
-        </select>
-      </label>
-
-      <label>
-        Vacunas al día
-        <select name="vacunas">
-          <option value="">No filtrar</option>
-          <option value="si" selected={vacunas === "si"}>Sí</option>
-          <option value="no" selected={vacunas === "no"}>No</option>
         </select>
       </label>
 
