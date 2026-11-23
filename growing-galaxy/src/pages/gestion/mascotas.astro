@@ -26,7 +26,7 @@ const resultado = await db.query(
     personalidad,
     historial_medico,
     estado_adopcion,
-    tipo_mascota
+    tipo_mascota,
     publicada
    FROM mascotas
    WHERE usuario_id = $1
@@ -34,7 +34,121 @@ const resultado = await db.query(
   [usuario.id]
 );
 
-const mascotas = agregarFotosMascotas(resultado.rows);
+
+  const todasLasMascotas = agregarFotosMascotas(resultado.rows);
+
+  // ======================================
+  // PESTAÑA SELECCIONADA
+  // ======================================
+
+  const estadosValidos = [
+    "activas",
+    "reservadas",
+    "adoptadas",
+    "ocultas"
+  ];
+
+  const estadoURL = Astro.url.searchParams.get("estado");
+
+  const estadoActual =
+    estadoURL && estadosValidos.includes(estadoURL)
+      ? estadoURL
+      : "activas";
+
+  // ======================================
+  // CONTAR MASCOTAS POR ESTADO
+  // ======================================
+
+  const contadores = {
+    activas: todasLasMascotas.filter(
+      (m) =>
+        m.publicada === true &&
+        m.estado_adopcion === "disponible"
+    ).length,
+
+    reservadas: todasLasMascotas.filter(
+      (m) =>
+        m.publicada === true &&
+        m.estado_adopcion === "reservada"
+    ).length,
+
+    adoptadas: todasLasMascotas.filter(
+      (m) =>
+        m.publicada === true &&
+        m.estado_adopcion === "adoptada"
+    ).length,
+
+    ocultas: todasLasMascotas.filter(
+      (m) => m.publicada === false
+    ).length
+  };
+
+  // ======================================
+  // DEFINICIÓN DE LAS PESTAÑAS
+  // ======================================
+
+  const pestanas = [
+    {
+      id: "activas",
+      nombre: "Activas",
+      icono: "fa-circle-check",
+      cantidad: contadores.activas
+    },
+    {
+      id: "reservadas",
+      nombre: "Reservadas",
+      icono: "fa-clock",
+      cantidad: contadores.reservadas
+    },
+    {
+      id: "adoptadas",
+      nombre: "Adoptadas",
+      icono: "fa-heart",
+      cantidad: contadores.adoptadas
+    },
+    {
+      id: "ocultas",
+      nombre: "Ocultas",
+      icono: "fa-eye-slash",
+      cantidad: contadores.ocultas
+    }
+  ];
+
+  // ======================================
+  // FILTRAR MASCOTAS SEGÚN LA PESTAÑA
+  // ======================================
+
+  const mascotas = todasLasMascotas.filter((mascota) => {
+
+    // Publicaciones ocultas
+    if (estadoActual === "ocultas") {
+      return mascota.publicada === false;
+    }
+
+    // Las mascotas ocultas no aparecen
+    // en las otras categorías.
+    if (mascota.publicada === false) {
+      return false;
+    }
+
+    // Mascotas disponibles
+    if (estadoActual === "activas") {
+      return mascota.estado_adopcion === "disponible";
+    }
+
+    // Mascotas reservadas
+    if (estadoActual === "reservadas") {
+      return mascota.estado_adopcion === "reservada";
+    }
+
+    // Mascotas adoptadas
+    if (estadoActual === "adoptadas") {
+      return mascota.estado_adopcion === "adoptada";
+    }
+
+    return false;
+  });
+
 ---
 
 <Layout
@@ -75,6 +189,39 @@ const mascotas = agregarFotosMascotas(resultado.rows);
 
       </div>
 
+          <!-- PESTAÑAS DE ESTADO DE LAS MASCOTAS -->
+
+          {todasLasMascotas.length > 0 && (
+            <nav
+              class="mis-mascotas-pestanas"
+              aria-label="Filtrar publicaciones por estado"
+            >
+              {pestanas.map((pestana) => (
+                <a
+                  href={`/gestion/mascotas?estado=${pestana.id}`}
+                  class:list={{
+                    "mis-mascotas-pestana": true,
+                    "activa": estadoActual === pestana.id
+                  }}
+                  aria-current={
+                    estadoActual === pestana.id
+                      ? "page"
+                      : undefined
+                  }
+                >
+                  <i class={`fa-solid ${pestana.icono}`}></i>
+
+                  <span>{pestana.nombre}</span>
+
+                  <span class="mis-mascotas-contador">
+                    {pestana.cantidad}
+                  </span>
+                </a>
+              ))}
+            </nav>
+          )}
+
+
       {
         mascotas.length === 0 ? (
           <section class="empty-state">
@@ -83,18 +230,27 @@ const mascotas = agregarFotosMascotas(resultado.rows);
               <i class="fa-solid fa-paw"></i>
             </div>
 
-            <h2>Todavía no tienes publicaciones</h2>
+            
+          <h2>
+            {todasLasMascotas.length === 0
+              ? "Todavía no tienes publicaciones"
+              : `No tienes mascotas ${estadoActual}`}
+          </h2>
 
-            <p>
-              Cuando publiques una mascota,
-              aparecerá automáticamente aquí.
-            </p>
+          <p>
+            {todasLasMascotas.length === 0
+              ? "Cuando publiques una mascota, aparecerá aquí."
+              : "Las mascotas aparecerán automáticamente en esta sección cuando tengan ese estado."}
+          </p>
+
 
             <a
               href="/gestion/crear-mascota"
               class="btn-primary"
             >
-              Publicar mi primera mascota
+              {todasLasMascotas.length === 0
+                ? "Publicar mi primera mascota"
+                : "Publicar otra mascota"}
             </a>
 
           </section>
