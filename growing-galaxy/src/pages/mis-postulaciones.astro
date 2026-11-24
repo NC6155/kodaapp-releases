@@ -40,7 +40,35 @@ const resultado = await db.query(
   [usuario.id]
 );
 
-const postulaciones = resultado.rows;
+    const postulaciones = resultado.rows;
+
+    const MAX_PENDIENTES = 3;
+    const MAX_DIARIAS = 3;
+
+    const consultaCupos = await db.query(
+      `SELECT
+        COUNT(*) FILTER (
+          WHERE estado = 'pendiente'
+        )::integer AS pendientes,
+
+        COUNT(*) FILTER (
+          WHERE
+            (creada_en AT TIME ZONE 'America/Santiago')::date =
+            (NOW() AT TIME ZONE 'America/Santiago')::date
+        )::integer AS enviadas_hoy
+
+      FROM postulaciones
+      WHERE adoptante_id = $1`,
+      [usuario.id]
+    );
+
+    const pendientes = Number(
+      consultaCupos.rows[0]?.pendientes ?? 0
+    );
+
+    const enviadasHoy = Number(
+      consultaCupos.rows[0]?.enviadas_hoy ?? 0
+    );
 
 
 const fechaHora = (valor: Date | string) => {
@@ -54,6 +82,27 @@ const fechaHora = (valor: Date | string) => {
     hour12: false
   });
 };
+
+    function mostrarEstado(postulacion: {
+      estado: string;
+      fin_tenencia: Date | string | null;
+    }) {
+      if (
+        postulacion.estado === "aprobada" &&
+        postulacion.fin_tenencia
+      ) {
+        return "Tenencia finalizada";
+      }
+
+      const nombres: Record<string, string> = {
+        pendiente: "Pendiente de evaluación",
+        aprobada: "Adopción vigente",
+        rechazada: "Postulación rechazada",
+        cancelada: "Postulación retirada"
+      };
+
+      return nombres[postulacion.estado] ?? postulacion.estado;
+    }
 
 ---
 
@@ -84,6 +133,63 @@ const fechaHora = (valor: Date | string) => {
         </p>
       </div>
 
+        <!-- RESUMEN DE CUPOS -->
+
+        <section class="resumen-cupos">
+          <h2>Resumen de mis postulaciones</h2>
+
+          <div class="resumen-cupos-grid">
+
+            <div class="cupo-card">
+              <span>Postulaciones pendientes</span>
+
+              <strong>
+                {pendientes} de {MAX_PENDIENTES}
+              </strong>
+
+              <progress
+                value={Math.min(pendientes, MAX_PENDIENTES)}
+                max={MAX_PENDIENTES}
+              ></progress>
+
+              <small>
+                Las solicitudes rechazadas o retiradas
+                liberan este cupo.
+              </small>
+            </div>
+
+            <div class="cupo-card">
+              <span>Postulaciones enviadas hoy</span>
+
+              <strong>
+                {enviadasHoy} de {MAX_DIARIAS}
+              </strong>
+
+              <progress
+                value={Math.min(enviadasHoy, MAX_DIARIAS)}
+                max={MAX_DIARIAS}
+              ></progress>
+
+              <small>
+                Se reinicia cada día según la hora de Chile.
+              </small>
+            </div>
+
+          </div>
+
+          {(pendientes >= MAX_PENDIENTES ||
+            enviadasHoy >= MAX_DIARIAS) && (
+            <p class="cupo-aviso" role="status">
+              <i class="fa-solid fa-circle-info"></i>
+
+              {enviadasHoy >= MAX_DIARIAS
+                ? "Alcanzaste el límite diario. Podrás volver a postular mañana, siempre que tengas cupos disponibles."
+                : "Ya tienes tres solicitudes pendientes. Espera una respuesta o retira una postulación."}
+            </p>
+          )}
+        </section>
+
+
       {
         postulaciones.length === 0 ? (
           <section class="post-empty">
@@ -108,7 +214,7 @@ const fechaHora = (valor: Date | string) => {
                 <span
                   class={`post-status is-${postulacion.estado}`}
                 >
-                  {postulacion.estado}
+                  {mostrarEstado(postulacion)}
                 </span>
 
                 <h2>{postulacion.mascota_nombre}</h2>
@@ -159,6 +265,16 @@ const fechaHora = (valor: Date | string) => {
                 }
 
                 <div class="post-entry-actions">
+                {postulacion.estado === "pendiente" && (
+                  <button
+                    type="button"
+                    class="btn-secondary retirar-postulacion"
+                    data-id={postulacion.id}
+                  >
+                    <i class="fa-solid fa-xmark"></i>
+                    Retirar postulación
+                  </button>
+                )}
                   <a
                     href={`/postular/${postulacion.mascota_id}`}
                     class="btn-secondary"
@@ -177,3 +293,121 @@ const fechaHora = (valor: Date | string) => {
     </div>
   </main>
 </Layout>
+
+<script>
+  document
+    .querySelectorAll<HTMLButtonElement>(".retirar-postulacion")
+    .forEach((boton) => {
+      boton.addEventListener("click", async () => {
+        if (!confirm(
+          "¿Deseas retirar esta postulación? " +
+          "Seguirá contando para el límite diario."
+        )) return;
+
+        boton.disabled = true;
+
+        try {
+          const respuesta = await fetch(
+            "/api/postulaciones/cancelar",
+            {
+              method: "POST",
+              credentials: "same-origin",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                id: Number(boton.dataset.id)
+              })
+            }
+          );
+
+          const resultado = await respuesta.json();
+
+          if (!respuesta.ok || !resultado.ok) {
+            throw new Error(resultado.mensaje);
+          }
+
+          // Actualiza el historial y los contadores.
+          window.location.reload();
+
+        } catch (error) {
+          boton.disabled = false;
+          alert(
+            error instanceof Error
+              ? error.message
+              : "No se pudo retirar la solicitud."
+          );
+        }
+      });
+    });
+</script>
+
+
+
+<style>
+  .resumen-cupos {
+    margin: 28px 0;
+  }
+
+  .resumen-cupos h2 {
+    margin-bottom: 18px;
+    font-size: 21px;
+    color: #fff;
+  }
+
+  .resumen-cupos-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .cupo-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 24px;
+    background: #242d38;
+    border: 1px solid #465365;
+    border-radius: 16px;
+    color: #fff;
+  }
+
+  .cupo-card span {
+    color: #c6cbd3;
+    font-size: 14px;
+  }
+
+  .cupo-card strong {
+    font-size: 30px;
+  }
+
+  .cupo-card progress {
+    width: 100%;
+    height: 10px;
+    accent-color: #ff6b4a;
+  }
+
+  .cupo-card small {
+    color: #acb6c4;
+    line-height: 1.5;
+  }
+
+  .cupo-aviso {
+    margin-top: 15px;
+    padding: 13px 16px;
+    border: 1px solid #846644;
+    background: #393025;
+    border-radius: 10px;
+    color: #ffd9a6;
+  }
+
+  .cupo-aviso i {
+    margin-right: 8px;
+  }
+
+  @media (max-width: 600px) {
+    .resumen-cupos-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

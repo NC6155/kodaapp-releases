@@ -83,7 +83,7 @@ export async function enviarCodigo(
   await transportador.sendMail({
     from: process.env.SMTP_USER,
     to: destinatario,
-    subject: "KodApp - Cambiar correo electrónico",
+    subject: "KodaApp - Cambiar correo electrónico",
     text: `Tu código de verificación es: ${codigo}
 
 El código vence en 15 minutos.

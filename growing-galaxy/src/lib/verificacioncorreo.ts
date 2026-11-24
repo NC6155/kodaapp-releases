@@ -110,12 +110,12 @@ export async function enviarCodigoCorreo(
   });
 
   await transporter.sendMail({
-    from: `"KodApp" <${usuarioSMTP}>`,
+    from: `"KodaApp" <${usuarioSMTP}>`,
     to: destinatario,
-    subject: "KodApp - Verifica tu correo",
+    subject: "KodaApp - Verifica tu correo",
 
     text:
-      `¡Bienvenido a KodApp!\n\n` +
+      `¡Bienvenido a KodaApp!\n\n` +
       `Tu código de seguridad es: ${codigo}\n\n` +
       `El código vence en 15 minutos.\n` +
       `No lo compartas con nadie.`,
@@ -132,7 +132,7 @@ export async function enviarCodigoCorreo(
         text-align:center;
       ">
         <h1 style="color:#ff6b4a;">
-          🐾 KodApp
+          🐾 KodaApp
         </h1>
 
         <h2>¡Verifica tu correo!</h2>

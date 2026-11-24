@@ -324,13 +324,16 @@ const resultado = await db.query(
 
                   <div class="management-pet-actions">
 
-                    <a
-                      href={`/gestion/mascotas/${mascota.id}/editar`}
-                      class="btn-outline"
-                    >
-                      <i class="fa-solid fa-pen"></i>
-                      Editar publicación
-                    </a>
+                    
+                    <div class="management-pet-actions">
+                      <a
+                        href={`/gestion/mascotas/${mascota.id}/editar`}
+                        class="btn-outline"
+                      >
+                        <i class="fa-solid fa-pen"></i>
+                        Editar publicación
+                      </a>
+                    </div>
 
                   </div>
 
@@ -345,3 +348,51 @@ const resultado = await db.query(
     </div>
   </main>
 </Layout>
+
+
+<script>
+  document
+    .querySelectorAll<HTMLButtonElement>(".boton-republicar")
+    .forEach((boton) => {
+      boton.addEventListener("click", async () => {
+        if (!confirm("¿Volver a publicar esta mascota?")) {
+          return;
+        }
+
+        boton.disabled = true;
+
+        try {
+          const respuesta = await fetch(
+            "/api/mascotas/republicar",
+            {
+              method: "POST",
+              credentials: "same-origin",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                id: Number(boton.dataset.id)
+              })
+            }
+          );
+
+          const resultado = await respuesta.json();
+
+          if (!respuesta.ok || !resultado.ok) {
+            throw new Error(resultado.mensaje);
+          }
+
+          window.location.reload();
+
+        } catch (error) {
+          boton.disabled = false;
+
+          alert(
+            error instanceof Error
+              ? error.message
+              : "No se pudo publicar la mascota."
+          );
+        }
+      });
+    });
+</script>

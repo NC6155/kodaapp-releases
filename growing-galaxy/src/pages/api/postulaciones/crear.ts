@@ -2,9 +2,9 @@
 import type { APIRoute } from "astro";
 import { db } from "../../../lib/db";
 import { getUsuarioDesdeSesion } from "../../../lib/auth";
-
 import { leerPostulacion } from "../../../lib/postulacion";
 import { comprobarCupo, ReglaAdopcion } from "../../../lib/adopcion";
+import { enviarAvisoKodaApp } from "../../../lib/notificacionesCorreo";
 
 export const prerender = false;
 
@@ -244,13 +244,72 @@ export const POST: APIRoute = async ({
       ]
     );
 
-    await conexion.query("COMMIT");
 
-    return responder({
-      ok: true,
-      mensaje:
-        "Tu postulación fue enviada correctamente."
-    }, 201);
+      await conexion.query("COMMIT");
+
+      // Notificar después de confirmar PostgreSQL.
+      try {
+        const informacion = await db.query(
+          `SELECT
+            m.nombre AS mascota,
+            a.nombre AS adoptante,
+            a.correo AS correo_adoptante,
+            o.correo AS correo_organizacion
+          FROM mascotas m
+          JOIN usuarios o ON o.id = m.usuario_id
+          JOIN usuarios a ON a.id = $2
+          WHERE m.id = $1`,
+          [mascotaId, usuario.id]
+        );
+
+        const datosCorreo = informacion.rows[0];
+
+        if (datosCorreo) {
+          const resultados = await Promise.allSettled([
+            enviarAvisoKodaApp({
+              para: datosCorreo.correo_adoptante,
+              asunto: "Postulación recibida",
+              titulo: "¡Recibimos tu postulación!",
+              mensaje:
+                "Tu solicitud fue registrada correctamente. " +
+                "La organización revisará la información enviada.",
+              detalle: `Mascota: ${datosCorreo.mascota}`
+            }),
+
+            enviarAvisoKodaApp({
+              para: datosCorreo.correo_organizacion,
+              asunto: "Nueva postulación de adopción",
+              titulo: "Tienes una nueva postulación",
+              mensaje:
+                `${datosCorreo.adoptante} ha enviado una ` +
+                "solicitud de adopción. Ingresa a tu panel " +
+                "para revisarla.",
+              detalle: `Mascota: ${datosCorreo.mascota}`
+            })
+          ]);
+
+          resultados.forEach((resultado) => {
+            if (resultado.status === "rejected") {
+              console.error(
+                "No se pudo enviar una notificación:",
+                resultado.reason
+              );
+            }
+          });
+        }
+
+      } catch (error) {
+        console.error(
+          "Error preparando notificaciones de postulación:",
+          error
+        );
+      }
+
+      return responder({
+        ok: true,
+        mensaje: "Tu postulación fue enviada correctamente."
+      }, 201);
+
 
   } catch (error) {
     await conexion.query("ROLLBACK").catch(() => {});
