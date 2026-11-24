@@ -1,0 +1,243 @@
+
+---
+interface Props {
+  fotos: string[];
+  nombre: string;
+}
+
+const { fotos, nombre } = Astro.props;
+---
+
+<div class="carrusel-mascota" data-carrusel-mascota>
+
+  {fotos.length > 0 ? (
+    <>
+      <div class="carrusel-visor">
+
+        <img
+          class="carrusel-imagen"
+          src={fotos[0]}
+          alt={`Fotografía de ${nombre}`}
+        />
+
+        {fotos.length > 1 && (
+          <>
+            <button
+              type="button"
+              class="carrusel-flecha anterior"
+              data-anterior
+              aria-label="Fotografía anterior"
+            >
+              <i class="fa-solid fa-chevron-left"></i>
+            </button>
+
+            <button
+              type="button"
+              class="carrusel-flecha siguiente"
+              data-siguiente
+              aria-label="Fotografía siguiente"
+            >
+              <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </>
+        )}
+
+        <span class="carrusel-contador" data-contador>
+          1 / {fotos.length}
+        </span>
+
+      </div>
+
+      {fotos.length > 1 && (
+        <div class="carrusel-miniaturas">
+          {fotos.map((foto, indice) => (
+            <button
+              type="button"
+              class:list={{
+                "carrusel-miniatura": true,
+                "activa": indice === 0
+              }}
+              data-foto={foto}
+              aria-label={`Ver fotografía ${indice + 1}`}
+              aria-pressed={indice === 0 ? "true" : "false"}
+            >
+              <img
+                src={foto}
+                alt={`Miniatura ${indice + 1}`}
+                loading="lazy"
+              />
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  ) : (
+    <div class="sin-fotos">
+      <i class="fa-solid fa-paw"></i>
+      <p>Esta mascota todavía no tiene fotografías.</p>
+    </div>
+  )}
+
+</div>
+
+<script>
+  document
+    .querySelectorAll<HTMLElement>("[data-carrusel-mascota]")
+    .forEach((carrusel) => {
+
+      const imagen =
+        carrusel.querySelector<HTMLImageElement>(
+          ".carrusel-imagen"
+        );
+
+      const contador =
+        carrusel.querySelector<HTMLElement>("[data-contador]");
+
+      const miniaturas = Array.from(
+        carrusel.querySelectorAll<HTMLButtonElement>(
+          "[data-foto]"
+        )
+      );
+
+      let indiceActual = 0;
+
+      function mostrarFoto(indice: number) {
+        if (!imagen || miniaturas.length === 0) return;
+
+        indiceActual =
+          (indice + miniaturas.length) % miniaturas.length;
+
+        imagen.src = miniaturas[indiceActual].dataset.foto ?? "";
+
+        if (contador) {
+          contador.textContent =
+            `${indiceActual + 1} / ${miniaturas.length}`;
+        }
+
+        miniaturas.forEach((boton, i) => {
+          boton.classList.toggle("activa", i === indiceActual);
+          boton.setAttribute(
+            "aria-pressed",
+            String(i === indiceActual)
+          );
+        });
+      }
+
+      carrusel
+        .querySelector("[data-anterior]")
+        ?.addEventListener("click", () => {
+          mostrarFoto(indiceActual - 1);
+        });
+
+      carrusel
+        .querySelector("[data-siguiente]")
+        ?.addEventListener("click", () => {
+          mostrarFoto(indiceActual + 1);
+        });
+
+      miniaturas.forEach((boton, indice) => {
+        boton.addEventListener("click", () => {
+          mostrarFoto(indice);
+        });
+      });
+    });
+</script>
+
+<style>
+  .carrusel-mascota {
+    width: 100%;
+  }
+
+  .carrusel-visor {
+    position: relative;
+    overflow: hidden;
+    border-radius: 18px;
+    background: #171a21;
+  }
+
+  .carrusel-imagen {
+    display: block;
+    width: 100%;
+    height: 410px;
+    object-fit: contain;
+  }
+
+  .carrusel-flecha {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 42px;
+    height: 42px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.65);
+    color: white;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .carrusel-flecha:hover {
+    background: #f59e0b;
+    color: #171717;
+  }
+
+  .anterior { left: 12px; }
+  .siguiente { right: 12px; }
+
+  .carrusel-contador {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    font-size: 13px;
+  }
+
+  .carrusel-miniaturas {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    margin-top: 14px;
+    padding-bottom: 8px;
+  }
+
+  .carrusel-miniatura {
+    flex: 0 0 76px;
+    width: 76px;
+    height: 76px;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 11px;
+    overflow: hidden;
+    background: transparent;
+    cursor: pointer;
+    opacity: 0.65;
+  }
+
+  .carrusel-miniatura.activa {
+    border-color: #f59e0b;
+    opacity: 1;
+  }
+
+  .carrusel-miniatura img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .sin-fotos {
+    min-height: 280px;
+    display: grid;
+    place-content: center;
+    text-align: center;
+    color: #aaa;
+  }
+
+  @media (max-width: 600px) {
+    .carrusel-imagen {
+      height: 290px;
+    }
+  }
+</style>

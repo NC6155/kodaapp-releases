@@ -29,7 +29,10 @@ export function hashCodigoCorreo(
   correo: string,
   codigo: string
 ): string {
-  const secreto = process.env.EMAIL_CODE_SECRET;
+
+  //const secreto = process.env.EMAIL_CODE_SECRET;
+  const secreto =
+    process.env.EMAIL_CODE_SECRET;
 
   if (!secreto || secreto.length < 32) {
     throw new Error(
@@ -85,8 +88,10 @@ export async function enviarCodigoCorreo(
   destinatario: string,
   codigo: string
 ): Promise<void> {
-  const usuarioSMTP = process.env.SMTP_USER;
-  const passwordSMTP = process.env.SMTP_APP_PASSWORD;
+  const usuarioSMTP =
+    import.meta.env.SMTP_USER ?? process.env.SMTP_USER;
+  const passwordSMTP =
+    import.meta.env.SMTP_APP_PASSWORD ?? process.env.SMTP_APP_PASSWORD;
 
   if (!usuarioSMTP || !passwordSMTP) {
     throw new Error(

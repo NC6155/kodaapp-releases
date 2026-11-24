@@ -3,6 +3,9 @@ import type { APIRoute } from "astro";
 import { db } from "../../../lib/db";
 import { getUsuarioDesdeSesion } from "../../../lib/auth";
 
+import { leerPostulacion } from "../../../lib/postulacion";
+import { comprobarCupo, ReglaAdopcion } from "../../../lib/adopcion";
+
 export const prerender = false;
 
 /**
@@ -59,93 +62,31 @@ export const POST: APIRoute = async ({
     }, 403);
   }
 
-  const cuerpo: unknown =
-    await request.json().catch(() => null);
-
-  if (
-    !cuerpo ||
-    typeof cuerpo !== "object" ||
-    Array.isArray(cuerpo)
-  ) {
-    return responder({
-      ok: false,
-      mensaje: "Datos inválidos."
-    }, 400);
+  let entrada;
+  try {
+    entrada = leerPostulacion(await request.json().catch(() => null));
+  } catch (error) {
+    return responder({ ok: false, mensaje: (error as Error).message }, 400);
   }
-
-  const datos = cuerpo as Record<string, unknown>;
-
-  const mascotaId = Number(datos.mascotaId);
-
-  const telefono =
-    typeof datos.telefono === "string"
-      ? datos.telefono.trim()
-      : "";
-
-  const vivienda =
-    typeof datos.vivienda === "string"
-      ? datos.vivienda.trim()
-      : "";
-
-  const motivo =
-    typeof datos.motivo === "string"
-      ? datos.motivo.trim()
-      : "";
-
-  if (
-    !Number.isSafeInteger(mascotaId) ||
-    mascotaId <= 0
-  ) {
-    return responder({
-      ok: false,
-      mensaje: "Mascota inválida."
-    }, 400);
-  }
-
-  if (
-    telefono.length < 7 ||
-    telefono.length > 25 ||
-    !/^[+0-9().\s-]+$/.test(telefono) ||
-    (telefono.match(/\d/g) ?? []).length < 7
-  ) {
-    return responder({
-      ok: false,
-      mensaje: "Introduce un teléfono válido."
-    }, 400);
-  }
-
-  if (
-    !["casa", "departamento", "otro"]
-      .includes(vivienda)
-  ) {
-    return responder({
-      ok: false,
-      mensaje: "Selecciona un tipo de vivienda."
-    }, 400);
-  }
-
-  if (
-    motivo.length < 30 ||
-    motivo.length > 1500
-  ) {
-    return responder({
-      ok: false,
-      mensaje:
-        "Explica tu motivación en 30 a 1500 caracteres."
-    }, 400);
-  }
-
-  if (datos.confirmacion !== "si") {
-    return responder({
-      ok: false,
-      mensaje: "Debes confirmar que los datos son correctos."
-    }, 400);
-  }
+  const { mascotaId, telefono, vivienda, motivo } = entrada;
 
   const conexion = await db.connect();
 
   try {
     await conexion.query("BEGIN");
+
+    // Bloquear al adoptante durante la postulación.
+    // Evita que dos solicitudes simultáneas superen
+    // los límites establecidos.
+    await conexion.query(
+      `SELECT id
+      FROM usuarios
+      WHERE id = $1
+      FOR UPDATE`,
+      [usuario.id]
+    );
+
+    
 
     // Bloquea la mascota durante el registro para
     // evitar decisiones simultáneas incompatibles.
@@ -153,6 +94,7 @@ export const POST: APIRoute = async ({
       `SELECT id, usuario_id, estado_adopcion
        FROM mascotas
        WHERE id = $1
+        AND publicada = TRUE
        FOR UPDATE`,
       [mascotaId]
     );
@@ -186,13 +128,70 @@ export const POST: APIRoute = async ({
       }, 403);
     }
 
+    const organizacion = await conexion.query(
+      "SELECT estado_cuenta FROM usuarios WHERE id = $1 FOR SHARE", [mascota.usuario_id]
+    );
+    if (organizacion.rows[0]?.estado_cuenta !== "activo") {
+      throw new ReglaAdopcion("La organización está suspendida.", 403);
+    }
+    await comprobarCupo(conexion, usuario.id);
+
+    // ==========================================
+    // LÍMITE DE POSTULACIONES DEL ADOPTANTE
+    // ==========================================
+
+    const MAX_PENDIENTES = 3;
+    const MAX_DIARIAS = 3;
+
+    const consultaLimites = await conexion.query(
+      `SELECT
+        COUNT(*) FILTER (
+          WHERE estado = 'pendiente'
+        )::integer AS pendientes,
+
+        COUNT(*) FILTER (
+          WHERE
+            (creada_en AT TIME ZONE 'America/Santiago')::date =
+            (CURRENT_TIMESTAMP AT TIME ZONE 'America/Santiago')::date
+        )::integer AS enviadas_hoy
+
+      FROM postulaciones
+      WHERE adoptante_id = $1`,
+      [usuario.id]
+    );
+
+    const pendientes = Number(
+      consultaLimites.rows[0].pendientes
+    );
+
+    const enviadasHoy = Number(
+      consultaLimites.rows[0].enviadas_hoy
+    );
+
+    // Máximo tres pendientes al mismo tiempo.
+    if (pendientes >= MAX_PENDIENTES) {
+      throw new ReglaAdopcion(
+        "Ya tienes 3 postulaciones pendientes. Espera una respuesta o retira una solicitud antes de postular nuevamente.",
+        409
+      );
+    }
+
+    // Máximo tres postulaciones enviadas por día.
+    if (enviadasHoy >= MAX_DIARIAS) {
+      throw new ReglaAdopcion(
+        "Alcanzaste el límite de 3 postulaciones diarias. Podrás volver a postular mañana.",
+        429
+      );
+    }
+
+
     // Una postulación aprobada cierra nuevas
     // solicitudes para esa mascota.
     const aprobada = await conexion.query(
       `SELECT id
        FROM postulaciones
        WHERE mascota_id = $1
-         AND estado = 'aprobada'
+         AND estado = 'aprobada' AND fin_tenencia IS NULL 
        LIMIT 1`,
       [mascotaId]
     );
@@ -256,6 +255,7 @@ export const POST: APIRoute = async ({
   } catch (error) {
     await conexion.query("ROLLBACK").catch(() => {});
 
+    if (error instanceof ReglaAdopcion) return responder({ ok: false, mensaje: error.message }, error.status);
     const codigo =
       (error as { code?: string }).code;
 

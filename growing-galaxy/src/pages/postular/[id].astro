@@ -46,7 +46,7 @@ if (
 // Obtener mascota y organización responsable.
 const consulta = await db.query(
   `SELECT
-     m.id,
+     m.id, m.foto_blob,
      m.nombre,
      m.descripcion,
      m.personalidad,
@@ -58,12 +58,12 @@ const consulta = await db.query(
        SELECT 1
        FROM postulaciones p
        WHERE p.mascota_id = m.id
-         AND p.estado = 'aprobada'
+         AND p.estado = 'aprobada' AND p.fin_tenencia IS NULL
      ) AS tiene_aprobada
    FROM mascotas m
    JOIN usuarios u
      ON u.id = m.usuario_id
-   WHERE m.id = $1`,
+   WHERE m.id = $1 AND u.estado_cuenta = 'activo'`,
   [mascotaId]
 );
 
@@ -72,7 +72,7 @@ if (consulta.rows.length === 0) {
 }
 
 // Agregar fotografía desde KodApp_Fotos.
-const mascotasConFoto = await agregarFotosMascotas(
+const mascotasConFoto = agregarFotosMascotas(
   consulta.rows
 );
 

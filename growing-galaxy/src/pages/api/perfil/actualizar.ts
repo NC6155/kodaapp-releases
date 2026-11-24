@@ -377,6 +377,16 @@ export const POST: APIRoute = async ({
         // REGLA ESPECIAL: ORGANIZACIÓN A ADOPTANTE
         // ===========================================
 
+        if (nuevoTipo === "organizacion") {
+          const activas = await conexion.query(
+            "SELECT 1 FROM postulaciones WHERE adoptante_id=$1 AND (estado='pendiente' OR (estado='aprobada' AND fin_tenencia IS NULL)) LIMIT 1",
+            [usuario.id]);
+          if (activas.rowCount) {
+            await conexion.query("ROLLBACK");
+            return responder({error: "Tienes postulaciones pendientes o tenencias activas."}, 409);
+          }
+        }
+
         if (nuevoTipo === "adoptante") {
 
           // Verificar publicaciones asociadas a

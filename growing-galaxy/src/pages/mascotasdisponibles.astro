@@ -13,25 +13,18 @@ import { agregarFotosMascotas } from "../lib/fotos";
 
 const resultado = await db.query(`
   SELECT
-    m.id,
+    m.id, m.foto_blob,
     m.nombre,
     m.descripcion,
     m.personalidad,
     m.historial_medico,
     m.tipo_mascota,
     m.estado_adopcion
-  FROM mascotas m
-  WHERE m.estado_adopcion = 'disponible'
-    AND NOT EXISTS (
-      SELECT 1
-      FROM postulaciones p
-      WHERE p.mascota_id = m.id
-        AND p.estado = 'aprobada'
-    )
+  FROM mascotas_postulables m
   ORDER BY m.id DESC
 `);
 
-const mascotas = await agregarFotosMascotas(
+const mascotas = agregarFotosMascotas(
   resultado.rows
 );
 ---

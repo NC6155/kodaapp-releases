@@ -26,9 +26,9 @@ if (usuario) {
     <a
       href={homeUrl}
       class="brand"
-      aria-label="Ir al inicio de KodApp"
+      aria-label="Ir al inicio de KodaApp"
     >
-      <img src={logo.src} alt="KodApp" />
+      <img src={logo.src} alt="KodaApp" />
     </a>
 
     <!-- MENÚ MÓVIL -->
@@ -49,6 +49,7 @@ if (usuario) {
       aria-label="Navegación principal"
     >
 
+      {usuario?.es_admin && <a href="/admin">Administración</a>}
       <!-- INICIO -->
       <a
         href={usuario ? homeUrl : "/"}
@@ -62,17 +63,29 @@ if (usuario) {
         Inicio
       </a>
 
-      <!-- MASCOTAS - PÁGINA INDEPENDIENTE -->
+
+      <!-- MASCOTAS - PÁGINA SEGÚN EL ROL -->
       <a
-        href="/mascotas"
+        href={
+          usuario?.tipo_usuario === "organizacion"
+            ? "/gestion/mascotas"
+            : "/mascotas"
+        }
         class:list={{
           "is-active":
             pathname === "/mascotas" ||
+            pathname.startsWith("/mascotas/") ||
+            pathname.startsWith("/gestion/mascotas") ||
             pathname.startsWith("/postular/")
         }}
       >
-        Mascotas
+        {
+          usuario?.tipo_usuario === "organizacion"
+            ? "Mis mascotas"
+            : "Mascotas"
+        }
       </a>
+
 
       <!-- COMPATIBILIDAD -->
       <a
@@ -140,7 +153,7 @@ if (usuario) {
 
               <a href={homeUrl}>
                 <i class="fa-solid fa-house"></i>
-                Mi cuenta
+                Panel de Inicio
               </a>
 
               <a href="/perfil">

@@ -43,6 +43,13 @@ export const onRequest = defineMiddleware(
   async (context, next) => {
     const ruta = context.url.pathname;
 
+    const origen = context.request.headers.get("origin");
+    if (origen && !["GET", "HEAD", "OPTIONS"].includes(context.request.method) && origen !== context.url.origin) {
+      return new Response(JSON.stringify({ok: false, mensaje: "Origen no permitido."}), {
+        status: 403, headers: {"Content-Type": "application/json", "Cache-Control": "no-store"}
+      });
+    }
+
     // Rutas que requieren una cuenta conectada.
     const rutasProtegidas = [
       "/perfil",

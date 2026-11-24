@@ -48,26 +48,14 @@ export const POST: APIRoute = async ({ request }) => {
   let conexion;
 
   try {
-    const datos = await request
-      .json()
-      .catch(() => ({}));
-
-    const nombre = String(
-      datos.nombre ?? ""
-    ).trim();
-
-    const rutEntrada = String(
-      datos.rut ?? ""
-    ).trim();
-
-    const correo = String(
-      datos.correo ?? ""
-    ).trim().toLowerCase();
-
-    const tipoUsuario = String(
-      datos.tipoUsuario ?? ""
-    );
-
+    const datos = await request.json().catch(() => null);
+    if (!datos || typeof datos !== "object" || Array.isArray(datos)) {
+      return responder({ok: false, mensaje: "Solicitud inválida."}, 400);
+    }
+    const nombre = typeof datos.nombre === "string" ? datos.nombre.trim() : "";
+    const rutEntrada = typeof datos.rut === "string" ? datos.rut.trim() : "";
+    const correo = typeof datos.correo === "string" ? datos.correo.trim().toLowerCase() : "";
+    const tipoUsuario = typeof datos.tipoUsuario === "string" ? datos.tipoUsuario : "";
     const contrasena = datos.contrasena;
     const comprobante = datos.comprobante;
 

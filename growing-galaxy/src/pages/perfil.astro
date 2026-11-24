@@ -3,6 +3,7 @@
 import Layout from "../layouts/Layout.astro";
 import Header from "../components/Header.astro";
 import { getUsuarioDesdeSesion } from "../lib/auth";
+import EditorRecorteFoto from "../components/EditorRecorteFoto.astro";
 
 /**
  * KODAPP - MI PERFIL
@@ -37,7 +38,7 @@ const volver =
 ---
 
 <Layout
-  title="Mi perfil | KodApp"
+  title="Mi perfil | KodaApp"
   description="Consulta y edita tu perfil."
 >
   <Header />
@@ -104,6 +105,11 @@ const volver =
             type="file"
             accept="image/png,image/jpeg,image/webp"
             hidden
+          />
+          <EditorRecorteFoto
+            inputId="profile-photo-input"
+            previewId="profile-avatar"
+            forma="circulo"
           />
 
           <p
@@ -257,70 +263,74 @@ const volver =
   // CAMBIAR FOTOGRAFÍA
   // =====================================
 
-  const fotoInput =
-    document.querySelector<HTMLInputElement>(
-      "#profile-photo-input"
-    );
+  
+// =====================================
+// CAMBIAR FOTOGRAFÍA DE PERFIL
+// =====================================
 
-  const fotoMensaje =
-    document.querySelector<HTMLElement>(
-      "#profile-photo-message"
-    );
+    const fotoInput =
+      document.querySelector<HTMLInputElement>(
+        "#profile-photo-input"
+      );
 
-  fotoInput?.addEventListener("change", async () => {
-    const archivo = fotoInput.files?.[0];
+    const fotoMensaje =
+      document.querySelector<HTMLElement>(
+        "#profile-photo-message"
+      );
 
-    if (!archivo || !fotoMensaje) return;
+    // Este evento se ejecuta solamente cuando el
+    // usuario confirma el recorte de la fotografía.
+    fotoInput?.addEventListener(
+      "kodapp:foto-recortada",
+      async () => {
+        const archivo = fotoInput.files?.[0];
 
-    const tiposPermitidos = [
-      "image/jpeg",
-      "image/png",
-      "image/webp"
-    ];
+        if (!archivo || !fotoMensaje) return;
 
-    // Validación rápida del navegador.
-    if (
-      !tiposPermitidos.includes(archivo.type) ||
-      archivo.size > 5 * 1024 * 1024
-    ) {
-      fotoMensaje.textContent =
-        "Selecciona una imagen JPG, PNG o WebP de hasta 5 MB.";
+        const datos = new FormData();
+        datos.append("foto", archivo);
 
-      fotoInput.value = "";
-      return;
-    }
+        fotoMensaje.textContent =
+          "Guardando fotografía en Azure...";
 
-    const datos = new FormData();
-    datos.append("foto", archivo);
+        fotoInput.disabled = true;
 
-    fotoMensaje.textContent = "Guardando fotografía...";
+        try {
+          const respuesta = await fetch(
+            "/api/perfil/foto",
+            {
+              method: "POST",
+              credentials: "same-origin",
+              body: datos
+            }
+          );
 
-    try {
-      // Endpoint original de KodApp.
-      const respuesta = await fetch("/api/perfil/foto", {
-        method: "POST",
-        credentials: "same-origin",
-        body: datos
-      });
+          const resultado = await respuesta.json();
 
-      const resultado = await respuesta.json();
+          if (!respuesta.ok || !resultado.ok) {
+            throw new Error(
+              resultado.mensaje ||
+              "No se pudo guardar la fotografía."
+            );
+          }
 
-      if (!respuesta.ok || !resultado.ok) {
-        throw new Error(
-          resultado.mensaje || "No se pudo guardar la foto."
-        );
+          fotoMensaje.textContent =
+            "Fotografía actualizada correctamente.";
+
+          // Recargar para actualizar también
+          // la fotografía que aparece en el Header.
+          window.location.reload();
+
+        } catch (error) {
+          fotoMensaje.textContent =
+            error instanceof Error
+              ? error.message
+              : "Error al actualizar la fotografía.";
+        } finally {
+          fotoInput.disabled = false;
+        }
       }
-
-      // Actualizar foto del perfil y Header.
-      window.location.reload();
-
-    } catch (error) {
-      fotoMensaje.textContent =
-        error instanceof Error
-          ? error.message
-          : "No se pudo guardar la fotografía.";
-    }
-  });
+    );
 
   // =====================================
   // CAMBIAR DESCRIPCIÓN

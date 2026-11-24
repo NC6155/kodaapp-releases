@@ -11,6 +11,9 @@ import Layout from "../../layouts/Layout.astro";
 import Header from "../../components/Header.astro";
 import ClasificacionMascota from "../../components/ClasificacionMascota.astro";
 import { getUsuarioDesdeSesion } from "../../lib/auth";
+import SelectorRazaComuna from "../../components/SelectorRazaComuna.astro";
+import GaleriaFormulario from "../../components/GaleriaFormulario.astro";
+import EditorRecorteFoto from "../../components/EditorRecorteFoto.astro";
 
 export const prerender = false;
 
@@ -30,7 +33,7 @@ if (usuario.tipo_usuario !== "organizacion") {
 ---
 
 <Layout
-  title="Publicar mascota | KodApp"
+  title="Publicar mascota | KodaApp"
   description="Publica una mascota para adopción."
 >
   <Header />
@@ -102,6 +105,11 @@ if (usuario.tipo_usuario !== "organizacion") {
               name="foto"
               accept="image/jpeg,image/png,image/webp"
               hidden
+            />
+            <EditorRecorteFoto
+              inputId="foto"
+              previewId="preview-container"
+              forma="cuadrado"
             />
 
             <small>
@@ -198,7 +206,95 @@ if (usuario.tipo_usuario !== "organizacion") {
 
         <ClasificacionMascota />
 
+        <!-- DATOS ADICIONALES DE LA MASCOTA -->
 
+        <section class="form-section">
+          <div class="form-section-header">
+            <span class="form-step">05</span>
+            <div>
+              <h2>Características de la mascota</h2>
+              <p>Información para que el adoptante conozca mejor a la mascota.</p>
+            </div>
+          </div>
+
+
+        <div class="form-grid">
+
+          <!-- Selección de raza y comuna -->
+          <SelectorRazaComuna tipoId="tipo-mascota" />
+
+          <div class="form-field">
+            <label for="edadMeses">Edad aproximada (meses)</label>
+            <input
+              type="number"
+              id="edadMeses"
+              name="edadMeses"
+              min="0"
+              max="360"
+              step="1"
+              placeholder="Ej.: 18"
+            />
+            <small>12 meses equivalen a un año.</small>
+          </div>
+
+          <div class="form-field">
+            <label for="sexo">Sexo</label>
+            <select id="sexo" name="sexo">
+              <option value="desconocido">Sin especificar</option>
+              <option value="macho">Macho</option>
+              <option value="hembra">Hembra</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="tamano">Tamaño</label>
+            <select id="tamano" name="tamano">
+              <option value="desconocido">Sin especificar</option>
+              <option value="pequeno">Pequeño</option>
+              <option value="mediano">Mediano</option>
+              <option value="grande">Grande</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="esterilizado">¿Está esterilizada?</label>
+            <select id="esterilizado" name="esterilizado">
+              <option value="desconocido">No se sabe</option>
+              <option value="si">Sí</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="vacunasAlDia">¿Tiene las vacunas al día?</label>
+            <select id="vacunasAlDia" name="vacunasAlDia">
+              <option value="desconocido">No se sabe</option>
+              <option value="si">Sí</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+
+         
+
+
+            <div class="form-field form-field-full">
+              <label for="requisitosAdopcion">Requisitos de adopción</label>
+              <textarea
+                id="requisitosAdopcion"
+                name="requisitosAdopcion"
+                rows="4"
+                maxlength="2000"
+                placeholder="Ej.: Tener espacio adecuado, dedicar tiempo a sus cuidados..."
+              ></textarea>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- GALERÍA DE FOTOGRAFÍAS -->
+        <GaleriaFormulario />
+
+        
         <!-- MENSAJES -->
 
         <p
@@ -240,15 +336,7 @@ if (usuario.tipo_usuario !== "organizacion") {
       "#mascota-form"
     );
 
-  const photoInput =
-    document.querySelector<HTMLInputElement>(
-      "#foto"
-    );
 
-  const previewContainer =
-    document.querySelector<HTMLElement>(
-      "#preview-container"
-    );
 
   const message =
     document.querySelector<HTMLElement>(
@@ -265,43 +353,55 @@ if (usuario.tipo_usuario !== "organizacion") {
   // VISTA PREVIA DE LA FOTO
   // ==========================================
 
-  photoInput?.addEventListener("change", () => {
-    const archivo = photoInput.files?.[0];
 
-    if (!archivo || !previewContainer) {
-      return;
-    }
+// ==========================================
+// VISTA PREVIA DE LA GALERÍA
+// ==========================================
 
-    const tiposPermitidos = [
-      "image/jpeg",
-      "image/png",
-      "image/webp"
-    ];
+    const galeriaInput =
+      document.querySelector<HTMLInputElement>("#galeria");
 
-    if (
-      !tiposPermitidos.includes(archivo.type) ||
-      archivo.size > 5 * 1024 * 1024
-    ) {
-      alert(
-        "Selecciona una imagen JPG, PNG o WebP de hasta 5 MB."
-      );
+    const galeriaPreview =
+      document.querySelector<HTMLElement>("#galeria-preview");
 
-      photoInput.value = "";
-      return;
-    }
+    galeriaInput?.addEventListener("change", () => {
+      if (!galeriaInput || !galeriaPreview) return;
 
-    const url = URL.createObjectURL(archivo);
-    const imagen = document.createElement("img");
+      galeriaPreview.replaceChildren();
 
-    imagen.src = url;
-    imagen.alt = "Vista previa de la mascota";
+      const archivos = Array.from(galeriaInput.files ?? []);
 
-    imagen.onload = () => {
-      URL.revokeObjectURL(url);
-    };
+      if (archivos.length > 4) {
+        alert("Puedes seleccionar máximo 4 fotografías adicionales.");
+        galeriaInput.value = "";
+        return;
+      }
 
-    previewContainer.replaceChildren(imagen);
-  });
+      for (const archivo of archivos) {
+        if (
+          !["image/jpeg", "image/png", "image/webp"].includes(archivo.type) ||
+          archivo.size > 5 * 1024 * 1024
+        ) {
+          alert("Cada imagen debe ser JPG, PNG o WebP y pesar máximo 5 MB.");
+          galeriaInput.value = "";
+          galeriaPreview.replaceChildren();
+          return;
+        }
+      }
+
+      for (const archivo of archivos) {
+        const imagen = document.createElement("img");
+        const url = URL.createObjectURL(archivo);
+
+        imagen.src = url;
+        imagen.alt = `Vista previa de ${archivo.name}`;
+        imagen.loading = "lazy";
+
+        imagen.onload = () => URL.revokeObjectURL(url);
+        galeriaPreview.appendChild(imagen);
+      }
+});
+
 
 
   // ==========================================
@@ -364,3 +464,22 @@ if (usuario.tipo_usuario !== "organizacion") {
     }
   });
 </script>
+
+
+<style>
+  .galeria-preview {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 15px;
+  }
+
+  .galeria-preview img {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 2px solid #f59e0b;
+  }
+</style>
+

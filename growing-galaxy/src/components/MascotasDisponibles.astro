@@ -3,98 +3,473 @@
 import { db } from "../lib/db";
 import { agregarFotosMascotas } from "../lib/fotos";
 
-// Datos de las mascotas en KodApp.
-const resultado = await db.query(`
-  SELECT
-    id,
-    nombre,
-    descripcion,
-    personalidad,
-    historial_medico,
-    tipo_mascota,
-    estado_adopcion
-  FROM mascotas
-  WHERE estado_adopcion = 'disponible'
-  ORDER BY id DESC
-`);
+import {
+  COMUNAS_POR_PROVINCIA
+} from "../lib/catalogosMascotas";
 
-// Fotografías desde KodApp_Fotos.
-const mascotas = await agregarFotosMascotas(resultado.rows);
+import {
+  PERSONALIDADES,
+  ANTECEDENTES_MEDICOS
+} from "../lib/CatalogoMatch";
+
+// Obtener las razas que realmente tienen
+// las mascotas publicadas.
+const resultadoRazas = await db.query(
+  `SELECT DISTINCT raza
+   FROM mascotas_postulables
+   WHERE raza IS NOT NULL
+     AND TRIM(raza) <> ''
+   ORDER BY raza`
+);
+
+const razas: string[] = resultadoRazas.rows.map(
+  (fila) => String(fila.raza)
+);
+
+// Leer y validar filtros de la URL.
+function filtro(
+  nombre: string,
+  permitidos: readonly string[]
+): string {
+  const valor = Astro.url.searchParams.get(nombre) ?? "";
+  return permitidos.includes(valor) ? valor : "";
+}
+
+const tipo = filtro("tipo", ["perro", "gato", "otro"]);
+
+const comunas = Object.values(
+  COMUNAS_POR_PROVINCIA
+).flat();
+
+const comuna = filtro("comuna", comunas);
+const raza = filtro("raza", razas);
+
+const personalidad = filtro(
+  "personalidad",
+  [...PERSONALIDADES.map((p) => p.valor), "otro"]
+);
+
+const cuidado = filtro(
+  "cuidado",
+  [...ANTECEDENTES_MEDICOS.map((c) => c.valor), "otro"]
+);
+
+const tamano = filtro(
+  "tamano",
+  ["pequeno", "mediano", "grande", "desconocido"]
+);
+
+
+const esterilizado = filtro(
+  "esterilizado",
+  ["si", "no"]
+);
+
+// Consultar solamente las mascotas
+// que cumplen con los filtros.
+const resultado = await db.query(
+  `SELECT
+     m.id,
+     m.foto_blob,
+     m.nombre,
+     m.descripcion,
+     m.tipo_mascota,
+     m.raza,
+     m.ubicacion,
+     m.tamano,
+     m.personalidad,
+     m.personalidad_codigo,
+     m.historial_medico,
+     m.salud_codigo,
+     m.vacunas_al_dia,
+     m.esterilizado
+   FROM mascotas_postulables m
+   WHERE ($1::text = '' OR m.tipo_mascota = $1)
+     AND ($2::text = '' OR m.ubicacion = $2)
+     AND ($3::text = '' OR m.raza = $3)
+     AND ($4::text = '' OR m.personalidad_codigo = $4)
+     AND ($5::text = '' OR m.salud_codigo = $5)
+     AND ($6::text = '' OR m.tamano = $6)
+     AND (
+       $7::text = '' OR
+       m.esterilizado = ($7::text = 'si')  
+       
+     )
+   ORDER BY m.id DESC`,
+  [
+    tipo,
+    comuna,
+    raza,
+    personalidad,
+    cuidado,
+    tamano,
+    esterilizado
+  ]
+);
+
+const mascotas = agregarFotosMascotas(resultado.rows);
+
+const hayFiltros = [
+  tipo, comuna, raza, personalidad,
+  cuidado, tamano, esterilizado
+].some(Boolean);
 ---
 
 <section class="mascotas-disponibles">
+
   <div class="mascotas-disponibles-header">
     <p class="small-title">Encuentra a tu compañero</p>
     <h2>Mascotas disponibles</h2>
     <p>
-      Conoce a las mascotas que están esperando encontrar un nuevo hogar.
+      Filtra por ubicación, características y cuidados
+      para encontrar una mascota adecuada para ti.
     </p>
   </div>
 
-  {
-    mascotas.length === 0 ? (
-      <div class="mascotas-vacias">
-        <i class="fa-solid fa-paw"></i>
-        <h3>No hay mascotas disponibles</h3>
-        <p>
-          Por ahora no hay mascotas publicadas para adopción.
-        </p>
-      </div>
-    ) : (
-      <div class="mascotas-grid">
-        {mascotas.map((mascota) => (
-          <article class="mascota-card">
-            <div class="mascota-card-image">
-              {mascota.foto ? (
-                <img
-                  src={mascota.foto}
-                  alt={`Foto de ${mascota.nombre}`}
-                  loading="lazy"
-                />
-              ) : (
-                <div class="mascota-no-image">
-                  <i class="fa-solid fa-paw"></i>
-                </div>
-              )}
-            </div>
+  <!-- FILTROS -->
 
-            <div class="mascota-card-content">
-              <span class="mascota-tipo">
-                {mascota.tipo_mascota}
-              </span>
+  <form
+    method="GET"
+    action="/mascotas"
+    class="ka-filtros"
+  >
+    <div class="ka-filtros-titulo">
+      <h3>
+        <i class="fa-solid fa-sliders"></i>
+        Filtrar mascotas
+      </h3>
+      <span>{mascotas.length} resultados</span>
+    </div>
 
-              <h3>{mascota.nombre}</h3>
+    <div class="ka-filtros-grid">
 
-              {mascota.descripcion && (
-                <p>{mascota.descripcion}</p>
-              )}
+      <label>
+        Tipo de mascota
+        <select name="tipo">
+          <option value="">Todos</option>
+          <option value="perro" selected={tipo === "perro"}>Perros</option>
+          <option value="gato" selected={tipo === "gato"}>Gatos</option>
+          <option value="otro" selected={tipo === "otro"}>Otros</option>
+        </select>
+      </label>
 
-              {mascota.personalidad && (
-                <div class="mascota-info">
-                  <strong>Personalidad</strong>
-                  <span>{mascota.personalidad}</span>
-                </div>
-              )}
+      <label>
+        Comuna
+        <select name="comuna">
+          <option value="">Todas las comunas</option>
 
-              {mascota.historial_medico && (
-                <div class="mascota-info">
-                  <strong>Historial médico</strong>
-                  <span>{mascota.historial_medico}</span>
-                  {/* BOTÓN PARA POSTULAR */}
-                  <a
-                    href={`/postular/${mascota.id}`}
-                    class="btn-primary"
-                    style="margin-top: 20px;"
+          {Object.entries(COMUNAS_POR_PROVINCIA).map(
+            ([provincia, opciones]) => (
+              <optgroup label={provincia}>
+                {opciones.map((opcion) => (
+                  <option
+                    value={opcion}
+                    selected={comuna === opcion}
                   >
-                    <i class="fa-solid fa-clipboard-check"></i>
-                    Postular para adoptar
-                  </a>
-                </div>
+                    {opcion}
+                  </option>
+                ))}
+              </optgroup>
+            )
+          )}
+        </select>
+      </label>
+
+      <label>
+        Raza
+        <select name="raza">
+          <option value="">Todas las razas</option>
+          {razas.map((opcion) => (
+            <option
+              value={opcion}
+              selected={raza === opcion}
+            >
+              {opcion}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label>
+        Tamaño
+        <select name="tamano">
+          <option value="">Todos los tamaños</option>
+          <option value="pequeno" selected={tamano === "pequeno"}>Pequeño</option>
+          <option value="mediano" selected={tamano === "mediano"}>Mediano</option>
+          <option value="grande" selected={tamano === "grande"}>Grande</option>
+          <option value="desconocido" selected={tamano === "desconocido"}>Desconocido</option>
+        </select>
+      </label>
+
+      <label>
+        Personalidad
+        <select name="personalidad">
+          <option value="">Todas</option>
+          {PERSONALIDADES.map((p) => (
+            <option
+              value={p.valor}
+              selected={personalidad === p.valor}
+            >
+              {p.etiqueta}
+            </option>
+          ))}
+          <option value="otro" selected={personalidad === "otro"}>
+            Otra
+          </option>
+        </select>
+      </label>
+
+      <label>
+        Antecedentes médicos
+        <select name="cuidado">
+          <option value="">Todos</option>
+          {ANTECEDENTES_MEDICOS.map((c) => (
+            <option
+              value={c.valor}
+              selected={cuidado === c.valor}
+            >
+              {c.etiqueta}
+            </option>
+          ))}
+          <option value="otro" selected={cuidado === "otro"}>
+            Otro
+          </option>
+        </select>
+      </label>
+
+      <label>
+        Esterilización
+        <select name="esterilizado">
+          <option value="">No filtrar</option>
+          <option value="si" selected={esterilizado === "si"}>Sí</option>
+          <option value="no" selected={esterilizado === "no"}>No</option>
+        </select>
+      </label>
+
+    </div>
+
+    <div class="ka-filtros-acciones">
+      <a href="/mascotas" class="btn-outline">
+        Limpiar filtros
+      </a>
+
+      <button type="submit" class="btn-primary">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        Buscar mascotas
+      </button>
+    </div>
+  </form>
+
+  <!-- RESULTADOS -->
+
+  {mascotas.length === 0 ? (
+    <div class="mascotas-vacias">
+      <i class="fa-solid fa-paw"></i>
+      <h3>
+        {hayFiltros
+          ? "No hay mascotas con esos filtros"
+          : "No hay mascotas disponibles"}
+      </h3>
+      <p>
+        {hayFiltros
+          ? "Prueba con otras características o comunas."
+          : "Todavía no hay mascotas para adoptar."}
+      </p>
+    </div>
+  ) : (
+    <div class="mascotas-grid">
+
+      {mascotas.map((mascota) => (
+        <article class="mascota-card">
+
+          <div class="mascota-card-image">
+            {mascota.foto ? (
+              <img
+                src={mascota.foto}
+                alt={`Fotografía de ${mascota.nombre}`}
+                loading="lazy"
+              />
+            ) : (
+              <div class="mascota-no-image">
+                <i class="fa-solid fa-paw"></i>
+              </div>
+            )}
+          </div>
+
+          <div class="mascota-card-content">
+
+            <span class="mascota-tipo">
+              {mascota.tipo_mascota}
+            </span>
+
+            <h3>{mascota.nombre}</h3>
+
+            <div class="ka-mascota-etiquetas">
+              {mascota.ubicacion && (
+                <span>
+                  <i class="fa-solid fa-location-dot"></i>
+                  {mascota.ubicacion}
+                </span>
+              )}
+
+              {mascota.raza && <span>{mascota.raza}</span>}
+
+              {mascota.tamano && (
+                <span>{mascota.tamano}</span>
               )}
             </div>
-          </article>
-        ))}
-      </div>
-    )
-  }
+
+            {mascota.descripcion && (
+              <p>{mascota.descripcion}</p>
+            )}
+
+            {mascota.personalidad && (
+              <div class="mascota-info">
+                <strong>Personalidad</strong>
+                <span>{mascota.personalidad}</span>
+              </div>
+            )}
+
+            {mascota.historial_medico && (
+              <div class="mascota-info">
+                <strong>Cuidados y salud</strong>
+                <span>{mascota.historial_medico}</span>
+              </div>
+            )}
+
+            <div class="ka-mascota-acciones">
+
+              <a
+                href={`/mascotas/${mascota.id}`}
+                class="btn-outline"
+              >
+                Ver ficha completa
+              </a>
+
+              <a
+                href={`/postular/${mascota.id}`}
+                class="btn-primary"
+              >
+                Postular
+              </a>
+
+            </div>
+          </div>
+        </article>
+      ))}
+    </div>
+  )}
 </section>
+
+<style>
+  .ka-filtros {
+    padding: 24px;
+    margin: 25px 0 30px;
+    border: 1px solid #46515f;
+    border-radius: 18px;
+    background: #222a35;
+  }
+
+  .ka-filtros-titulo {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .ka-filtros-titulo h3 {
+    margin: 0;
+    font-size: 20px;
+    color: #fff;
+  }
+
+  .ka-filtros-titulo span {
+    color: #c5cbd3;
+    font-size: 13px;
+  }
+
+  .ka-filtros-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .ka-filtros-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    color: #e4e8ef;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .ka-filtros-grid select {
+    width: 100%;
+    min-width: 0;
+    height: 43px;
+    padding: 0 10px;
+    border: 1px solid #647284;
+    border-radius: 10px;
+    background: #131a23;
+    color: white;
+  }
+
+  .ka-filtros-acciones {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 20px;
+  }
+
+  .ka-mascota-etiquetas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 12px 0;
+  }
+
+  .ka-mascota-etiquetas span {
+    padding: 5px 9px;
+    background: #2e3945;
+    color: #f4f4f4;
+    border: 1px solid #53606c;
+    border-radius: 20px;
+    font-size: 11px;
+  }
+
+  .ka-mascota-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 20px;
+  }
+
+  .ka-mascota-acciones a {
+    flex: 1;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 1000px) {
+    .ka-filtros-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 600px) {
+    .ka-filtros-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .ka-filtros-acciones {
+      flex-direction: column;
+    }
+
+    .ka-mascota-acciones {
+      flex-direction: column;
+    }
+  }
+</style>

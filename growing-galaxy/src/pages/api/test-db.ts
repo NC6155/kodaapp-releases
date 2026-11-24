@@ -23,7 +23,7 @@ export const GET: APIRoute = async () => {
     return new Response(
       JSON.stringify({
         conectado: false,
-        error: String(error),
+        error: "Servicio no disponible.",
       }),
       {
         status: 500,

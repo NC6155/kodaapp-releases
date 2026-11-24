@@ -1,0 +1,397 @@
+
+<section class="form-section ka-galeria">
+  <div class="form-section-header">
+    <span class="form-step">06</span>
+    <div>
+      <h2>Galería de fotografías</h2>
+      <p>
+        Agrega hasta cuatro fotografías adicionales.
+        Puedes ordenarlas antes de publicar.
+      </p>
+    </div>
+  </div>
+
+  <!-- Selector de archivos -->
+  <input
+    type="file"
+    id="galeria-selector"
+    accept="image/jpeg,image/png,image/webp"
+    multiple
+    hidden
+  />
+
+  <!-- Archivos que realmente se enviarán a la API -->
+  <input
+    type="file"
+    id="galeria"
+    name="galeria"
+    multiple
+    hidden
+  />
+
+  <div class="ka-gal-zona" id="galeria-zona">
+    <i class="fa-solid fa-cloud-arrow-up"></i>
+    <h3>Agrega fotografías de la mascota</h3>
+    <p>
+      Arrastra las imágenes aquí o selecciónalas
+      desde tu computador.
+    </p>
+
+    <button
+      type="button"
+      id="galeria-agregar"
+      class="ka-gal-boton"
+    >
+      <i class="fa-solid fa-plus"></i>
+      Seleccionar fotografías
+    </button>
+
+    <small>JPG, PNG o WebP · Máximo 5 MB por foto</small>
+  </div>
+
+  <div class="ka-gal-resumen">
+    <strong>Fotografías adicionales</strong>
+    <span id="galeria-contador">0 / 4</span>
+  </div>
+
+  <div
+    id="galeria-lista"
+    class="ka-gal-lista"
+    aria-live="polite"
+  ></div>
+
+  <p id="galeria-error" class="ka-gal-error" role="alert"></p>
+</section>
+
+<script>
+  const selector =
+    document.querySelector<HTMLInputElement>("#galeria-selector");
+
+  const entradaFinal =
+    document.querySelector<HTMLInputElement>("#galeria");
+
+  const botonAgregar =
+    document.querySelector<HTMLButtonElement>("#galeria-agregar");
+
+  const zona =
+    document.querySelector<HTMLElement>("#galeria-zona");
+
+  const lista =
+    document.querySelector<HTMLElement>("#galeria-lista");
+
+  const contador =
+    document.querySelector<HTMLElement>("#galeria-contador");
+
+  const error =
+    document.querySelector<HTMLElement>("#galeria-error");
+
+  const MAX_FOTOS = 4;
+  const MAX_BYTES = 5 * 1024 * 1024;
+
+  const formatos = [
+    "image/jpeg",
+    "image/png",
+    "image/webp"
+  ];
+
+  let seleccionadas: File[] = [];
+  let urlsPrevias: string[] = [];
+
+  function mostrarError(mensaje: string) {
+    if (error) error.textContent = mensaje;
+  }
+
+  // Actualiza el input que recibe FormData.
+  function sincronizarArchivos() {
+    if (!entradaFinal) return;
+
+    const transferencia = new DataTransfer();
+
+    for (const archivo of seleccionadas) {
+      transferencia.items.add(archivo);
+    }
+
+    entradaFinal.files = transferencia.files;
+  }
+
+  function actualizarVista() {
+    if (!lista || !contador) return;
+
+    // Liberar vistas previas anteriores.
+    urlsPrevias.forEach((url) => URL.revokeObjectURL(url));
+    urlsPrevias = [];
+
+    lista.replaceChildren();
+    contador.textContent = `${seleccionadas.length} / ${MAX_FOTOS}`;
+
+    if (botonAgregar) {
+      botonAgregar.disabled =
+        seleccionadas.length >= MAX_FOTOS;
+    }
+
+    seleccionadas.forEach((archivo, indice) => {
+      const tarjeta = document.createElement("article");
+      tarjeta.className = "ka-gal-tarjeta";
+
+      const imagen = document.createElement("img");
+      const url = URL.createObjectURL(archivo);
+
+      urlsPrevias.push(url);
+      imagen.src = url;
+      imagen.alt = `Fotografía adicional ${indice + 1}`;
+
+      const nombre = document.createElement("p");
+      nombre.className = "ka-gal-nombre";
+      nombre.textContent = archivo.name;
+
+      const tamano = document.createElement("small");
+      tamano.textContent =
+        `${(archivo.size / 1024 / 1024).toFixed(2)} MB`;
+
+      const acciones = document.createElement("div");
+      acciones.className = "ka-gal-acciones";
+
+      const botonAnterior = document.createElement("button");
+      botonAnterior.type = "button";
+      botonAnterior.textContent = "←";
+      botonAnterior.title = "Mover a la izquierda";
+      botonAnterior.disabled = indice === 0;
+
+      botonAnterior.addEventListener("click", () => {
+        [seleccionadas[indice - 1], seleccionadas[indice]] =
+          [seleccionadas[indice], seleccionadas[indice - 1]];
+
+        sincronizarArchivos();
+        actualizarVista();
+      });
+
+      const botonSiguiente = document.createElement("button");
+      botonSiguiente.type = "button";
+      botonSiguiente.textContent = "→";
+      botonSiguiente.title = "Mover a la derecha";
+      botonSiguiente.disabled =
+        indice === seleccionadas.length - 1;
+
+      botonSiguiente.addEventListener("click", () => {
+        [seleccionadas[indice], seleccionadas[indice + 1]] =
+          [seleccionadas[indice + 1], seleccionadas[indice]];
+
+        sincronizarArchivos();
+        actualizarVista();
+      });
+
+      const botonEliminar = document.createElement("button");
+      botonEliminar.type = "button";
+      botonEliminar.textContent = "Quitar";
+      botonEliminar.className = "ka-gal-quitar";
+
+      botonEliminar.addEventListener("click", () => {
+        seleccionadas.splice(indice, 1);
+        sincronizarArchivos();
+        actualizarVista();
+        mostrarError("");
+      });
+
+      acciones.append(
+        botonAnterior,
+        botonSiguiente,
+        botonEliminar
+      );
+
+      tarjeta.append(imagen, nombre, tamano, acciones);
+      lista.appendChild(tarjeta);
+    });
+  }
+
+  function agregarArchivos(archivos: File[]) {
+    mostrarError("");
+
+    for (const archivo of archivos) {
+      if (!formatos.includes(archivo.type)) {
+        mostrarError(
+          "Solo se permiten fotografías JPG, PNG o WebP."
+        );
+        continue;
+      }
+
+      if (archivo.size > MAX_BYTES || archivo.size === 0) {
+        mostrarError(
+          "Cada fotografía debe tener un tamaño máximo de 5 MB."
+        );
+        continue;
+      }
+
+      // Evitar seleccionar dos veces el mismo archivo.
+      const repetida = seleccionadas.some((foto) =>
+        foto.name === archivo.name &&
+        foto.size === archivo.size &&
+        foto.lastModified === archivo.lastModified
+      );
+
+      if (repetida) continue;
+
+      if (seleccionadas.length >= MAX_FOTOS) {
+        mostrarError(
+          "Solo puedes agregar cuatro fotografías adicionales."
+        );
+        break;
+      }
+
+      seleccionadas.push(archivo);
+    }
+
+    sincronizarArchivos();
+    actualizarVista();
+  }
+
+  botonAgregar?.addEventListener("click", () => {
+    selector?.click();
+  });
+
+  selector?.addEventListener("change", () => {
+    agregarArchivos(Array.from(selector.files ?? []));
+    selector.value = "";
+  });
+
+  zona?.addEventListener("dragover", (evento) => {
+    evento.preventDefault();
+    zona.classList.add("arrastrando");
+  });
+
+  zona?.addEventListener("dragleave", () => {
+    zona.classList.remove("arrastrando");
+  });
+
+  zona?.addEventListener("drop", (evento) => {
+    evento.preventDefault();
+    zona.classList.remove("arrastrando");
+
+    agregarArchivos(
+      Array.from(evento.dataTransfer?.files ?? [])
+    );
+  });
+
+  actualizarVista();
+</script>
+
+<style is:global>
+  .ka-gal-zona {
+    padding: 32px 20px;
+    border: 2px dashed #65717f;
+    border-radius: 16px;
+    text-align: center;
+    background: #171e27;
+    transition: 0.2s;
+  }
+
+  .ka-gal-zona.arrastrando {
+    border-color: #f59e0b;
+    background: #2c291e;
+  }
+
+  .ka-gal-zona > i {
+    display: block;
+    font-size: 36px;
+    color: #f59e0b;
+    margin-bottom: 14px;
+  }
+
+  .ka-gal-zona h3 {
+    margin: 0 0 8px;
+    color: #fff;
+  }
+
+  .ka-gal-zona p,
+  .ka-gal-zona small {
+    color: #bac2ce;
+  }
+
+  .ka-gal-boton {
+    display: block;
+    margin: 18px auto;
+    padding: 12px 20px;
+    color: #171717;
+    background: #f59e0b;
+    border: none;
+    border-radius: 10px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+
+  .ka-gal-boton:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .ka-gal-resumen {
+    display: flex;
+    justify-content: space-between;
+    margin: 18px 0 12px;
+    color: #fff;
+  }
+
+  .ka-gal-lista {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+    gap: 12px;
+  }
+
+  .ka-gal-tarjeta {
+    min-width: 0;
+    padding: 10px;
+    background: #202833;
+    border: 1px solid #435063;
+    border-radius: 14px;
+  }
+
+  .ka-gal-tarjeta img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 9px;
+  }
+
+  .ka-gal-nombre {
+    margin: 9px 0 4px;
+    color: #fff;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  .ka-gal-tarjeta small {
+    color: #bac2ce;
+  }
+
+  .ka-gal-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 9px;
+  }
+
+  .ka-gal-acciones button {
+    padding: 5px 8px;
+    border: 1px solid #65717f;
+    border-radius: 7px;
+    background: #343f4d;
+    color: white;
+    cursor: pointer;
+  }
+
+  .ka-gal-acciones button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .ka-gal-acciones .ka-gal-quitar {
+    color: #ffd0d0;
+    border-color: #b44;
+  }
+
+  .ka-gal-error {
+    min-height: 20px;
+    margin-top: 10px;
+    color: #ff9999;
+  }
+</style>

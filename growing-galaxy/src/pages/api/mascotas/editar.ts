@@ -8,7 +8,8 @@ import {
   validarImagen,
   subirImagen,
   borrarImagen,
-  ErrorImagen
+  ErrorImagen,
+  type ImagenValidada
 } from "../../../lib/azure";
 
 import {
@@ -16,6 +17,11 @@ import {
   ANTECEDENTES_MEDICOS,
   procesarClasificacion
 } from "../../../lib/CatalogoMatch";
+
+import {
+  COMUNAS_BIOBIO,
+  RAZAS_POR_TIPO
+} from "../../../lib/catalogosMascotas";
 
 export const prerender = false;
 
@@ -32,23 +38,26 @@ function responder(
   });
 }
 
-export const POST: APIRoute = async ({
-  request,
-  cookies
-}) => {
+export const POST: APIRoute = async ({ request, cookies }) => {
+
+  // Verificar el origen de la solicitud.
   const origin = request.headers.get("origin");
 
-  if (
-    origin &&
-    origin !== new URL(request.url).origin
-  ) {
+  if (origin && origin !== new URL(request.url).origin) {
     return responder({
       ok: false,
       mensaje: "Origen no permitido."
     }, 403);
   }
 
+  // Referencias de archivos nuevos subidos a Azure.
+  const blobsNuevos: string[] = [];
+
   try {
+    // ==========================================
+    // 1. AUTENTICACIÓN
+    // ==========================================
+
     const usuario = await getUsuarioDesdeSesion(
       cookies.get("session_id")?.value
     );
@@ -56,7 +65,7 @@ export const POST: APIRoute = async ({
     if (!usuario) {
       return responder({
         ok: false,
-        mensaje: "Debes iniciar sesión."
+        mensaje: "Inicia sesión."
       }, 401);
     }
 
@@ -71,16 +80,22 @@ export const POST: APIRoute = async ({
 
     const id = Number(datos.get("id"));
 
-    if (!Number.isSafeInteger(id) || id <= 0) {
+    if (
+      !Number.isSafeInteger(id) ||
+      id < 1 ||
+      id > 2147483647
+    ) {
       return responder({
         ok: false,
         mensaje: "ID inválido."
       }, 400);
     }
 
-    const nombre = String(
-      datos.get("nombre") ?? ""
-    ).trim();
+    // ==========================================
+    // 2. DATOS DE LA MASCOTA
+    // ==========================================
+
+    const nombre = String(datos.get("nombre") ?? "").trim();
 
     const tipo = String(
       datos.get("tipoMascota") ?? ""
@@ -93,6 +108,137 @@ export const POST: APIRoute = async ({
     const estado = String(
       datos.get("estadoAdopcion") ?? ""
     ).trim();
+
+    const raza = String(datos.get("raza") ?? "").trim();
+
+    const ubicacion = String(
+      datos.get("ubicacion") ?? ""
+    ).trim();
+
+    const edadTexto = String(
+      datos.get("edadMeses") ?? ""
+    ).trim();
+
+    const sexo = String(
+      datos.get("sexo") ?? "desconocido"
+    );
+
+    const tamano = String(
+      datos.get("tamano") ?? "desconocido"
+    );
+
+    const esterilizadoTexto = String(
+      datos.get("esterilizado") ?? "desconocido"
+    );
+
+    const vacunasTexto = String(
+      datos.get("vacunasAlDia") ?? "desconocido"
+    );
+
+    const requisitos = String(
+      datos.get("requisitosAdopcion") ?? ""
+    ).trim();
+
+    // ==========================================
+    // 3. VALIDACIONES
+    // ==========================================
+
+    if (
+      !nombre ||
+      nombre.length > 100 ||
+      descripcion.length > 5000
+    ) {
+      return responder({
+        ok: false,
+        mensaje: "Revisa el nombre o la descripción."
+      }, 400);
+    }
+
+    if (!["perro", "gato", "otro"].includes(tipo)) {
+      return responder({
+        ok: false,
+        mensaje: "Tipo de mascota inválido."
+      }, 400);
+    }
+
+    if (
+      !["disponible", "reservada", "adoptada"]
+        .includes(estado)
+    ) {
+      return responder({
+        ok: false,
+        mensaje: "Estado de adopción inválido."
+      }, 400);
+    }
+
+    if (
+      raza.length > 100 ||
+      ubicacion.length > 120 ||
+      requisitos.length > 2000
+    ) {
+      return responder({
+        ok: false,
+        mensaje: "Raza, comuna o requisitos demasiado largos."
+      }, 400);
+    }
+
+    if (!COMUNAS_BIOBIO.includes(ubicacion)) {
+      return responder({
+        ok: false,
+        mensaje: "Selecciona una comuna válida del Biobío."
+      }, 400);
+    }
+
+    const razasPermitidas = RAZAS_POR_TIPO[tipo] ?? [];
+
+    if (!razasPermitidas.includes(raza)) {
+      return responder({
+        ok: false,
+        mensaje: "Selecciona una raza válida."
+      }, 400);
+    }
+
+    if (
+      !["macho", "hembra", "desconocido"].includes(sexo) ||
+      !["pequeno", "mediano", "grande", "desconocido"].includes(tamano) ||
+      !["si", "no", "desconocido"].includes(esterilizadoTexto) ||
+      !["si", "no", "desconocido"].includes(vacunasTexto)
+    ) {
+      return responder({
+        ok: false,
+        mensaje: "Revisa las características de la mascota."
+      }, 400);
+    }
+
+    // Convertir edad a número.
+    let edadMeses: number | null = null;
+
+    if (edadTexto !== "") {
+      edadMeses = Number(edadTexto);
+
+      if (
+        !/^\d+$/.test(edadTexto) ||
+        !Number.isInteger(edadMeses) ||
+        edadMeses > 360
+      ) {
+        return responder({
+          ok: false,
+          mensaje: "La edad debe estar entre 0 y 360 meses."
+        }, 400);
+      }
+    }
+
+    // Convertir valores de texto a booleanos.
+    const valorBool = (valor: string): boolean | null =>
+      valor === "si"
+        ? true
+        : valor === "no"
+          ? false
+          : null;
+
+    // ==========================================
+    // 4. PERSONALIDAD Y SALUD
+    // ==========================================
 
     const personalidad = procesarClasificacion(
       datos.get("personalidadCodigo"),
@@ -108,37 +254,6 @@ export const POST: APIRoute = async ({
       "los antecedentes médicos"
     );
 
-    if (!nombre || nombre.length > 100) {
-      return responder({
-        ok: false,
-        mensaje: "Nombre inválido."
-      }, 400);
-    }
-
-    if (!["perro", "gato", "otro"].includes(tipo)) {
-      return responder({
-        ok: false,
-        mensaje: "Tipo inválido."
-      }, 400);
-    }
-
-    if (
-      !["disponible", "reservada", "adoptada"]
-        .includes(estado)
-    ) {
-      return responder({
-        ok: false,
-        mensaje: "Estado inválido."
-      }, 400);
-    }
-
-    if (descripcion.length > 5000) {
-      return responder({
-        ok: false,
-        mensaje: "Descripción demasiado larga."
-      }, 400);
-    }
-
     if (!personalidad.ok) {
       return responder({
         ok: false,
@@ -153,40 +268,190 @@ export const POST: APIRoute = async ({
       }, 400);
     }
 
-    const imagen = await validarImagen(
+    // Evitar información contradictoria.
+    if (
+      (
+        salud.codigo === "vacunacion_pendiente" &&
+        vacunasTexto === "si"
+      ) ||
+      (
+        salud.codigo === "vacunacion_al_dia" &&
+        vacunasTexto === "no"
+      )
+    ) {
+      return responder({
+        ok: false,
+        mensaje: "La vacunación y los antecedentes médicos se contradicen."
+      }, 400);
+    }
+
+    // ==========================================
+    // 5. VALIDAR FOTOGRAFÍAS
+    // ==========================================
+
+    // Portada opcional: si no hay archivo,
+    // conserva la fotografía principal anterior.
+    const portadaNueva = await validarImagen(
       datos.get("foto"),
       true
     );
 
-    // Consultar la publicación y verificar propiedad.
-    const anterior = await db.query(
-      `SELECT foto_blob
-       FROM mascotas
-       WHERE id = $1
-         AND usuario_id = $2`,
-      [id, usuario.id]
-    );
+    // Nuevas fotografías adicionales.
+    const archivosGaleria = datos
+      .getAll("galeria")
+      .filter(
+        (valor): valor is File =>
+          valor instanceof File && valor.size > 0
+      );
 
-    if (!anterior.rows.length) {
+    if (archivosGaleria.length > 4) {
       return responder({
         ok: false,
-        mensaje: "Mascota no encontrada o sin permisos."
-      }, 404);
+        mensaje: "Máximo cuatro fotos adicionales."
+      }, 400);
     }
 
-    let fotoNueva: string | null = null;
+    const fotosNuevas: ImagenValidada[] = [];
 
-    // Si se seleccionó otra imagen, subirla.
-    if (imagen) {
-      fotoNueva = await subirImagen(
-        "mascotas",
-        id,
-        imagen
-      );
+    for (const archivo of archivosGaleria) {
+      const validada = await validarImagen(archivo);
+
+      if (validada) {
+        fotosNuevas.push(validada);
+      }
     }
+
+    // Identificadores de fotografías existentes
+    // que la organización marcó para quitar.
+    const valoresEliminar = datos.getAll("fotosEliminar");
+
+    if (
+      valoresEliminar.length > 4 ||
+      valoresEliminar.some(
+        (valor) =>
+          typeof valor !== "string" ||
+          !/^\d+$/.test(valor) ||
+          !Number.isSafeInteger(Number(valor)) ||
+          Number(valor) < 1
+      )
+    ) {
+      return responder({
+        ok: false,
+        mensaje: "Selección de fotografías inválida."
+      }, 400);
+    }
+
+    const idsEliminar = [
+      ...new Set(
+        valoresEliminar.map((valor) => Number(valor))
+      )
+    ];
+
+    // ==========================================
+    // 6. TRANSACCIÓN POSTGRESQL
+    // ==========================================
+
+    const cliente = await db.connect();
+
+    let blobsAntiguos: string[] = [];
 
     try {
-      const resultado = await db.query(
+      await cliente.query("BEGIN");
+
+      // Solo puede editar el dueño de la mascota.
+      const resultadoMascota = await cliente.query(
+        `SELECT id, foto_blob
+         FROM mascotas
+         WHERE id = $1
+           AND usuario_id = $2
+         FOR UPDATE`,
+        [id, usuario.id]
+      );
+
+      if (resultadoMascota.rows.length === 0) {
+        await cliente.query("ROLLBACK");
+
+        return responder({
+          ok: false,
+          mensaje: "Mascota inexistente o sin permisos."
+        }, 404);
+      }
+
+      const anterior = resultadoMascota.rows[0];
+
+      // Consultar galería actual.
+      const galeria = await cliente.query(
+        `SELECT id, foto_blob, orden
+         FROM mascotas_fotos
+         WHERE mascota_id = $1
+         ORDER BY orden
+         FOR UPDATE`,
+        [id]
+      );
+
+      const actuales = galeria.rows as {
+        id: number | string;
+        foto_blob: string;
+        orden: number;
+      }[];
+
+      // Verificar que las fotos elegidas pertenezcan
+      // realmente a esta mascota.
+      if (
+        idsEliminar.some(
+          (idFoto) =>
+            !actuales.some(
+              (foto) => Number(foto.id) === idFoto
+            )
+        )
+      ) {
+        await cliente.query("ROLLBACK");
+
+        return responder({
+          ok: false,
+          mensaje: "Hay una foto que no pertenece a esta mascota."
+        }, 400);
+      }
+
+      const seEliminan = actuales.filter(
+        (foto) => idsEliminar.includes(Number(foto.id))
+      );
+
+      const conservadas = actuales.filter(
+        (foto) => !idsEliminar.includes(Number(foto.id))
+      );
+
+      // Comprobar el total de fotos adicionales.
+      if (conservadas.length + fotosNuevas.length > 4) {
+        await cliente.query("ROLLBACK");
+
+        return responder({
+          ok: false,
+          mensaje: "Solo puedes conservar cuatro fotos adicionales."
+        }, 400);
+      }
+
+      // ==========================================
+      // 7. ACTUALIZAR FOTO PRINCIPAL
+      // ==========================================
+
+      let blobPortada: string | null = null;
+
+      if (portadaNueva) {
+        blobPortada = await subirImagen(
+          "mascotas",
+          id,
+          portadaNueva
+        );
+
+        blobsNuevos.push(blobPortada);
+      }
+
+      // ==========================================
+      // 8. ACTUALIZAR DATOS
+      // ==========================================
+
+      await cliente.query(
         `UPDATE mascotas
          SET
            nombre = $1,
@@ -197,10 +462,17 @@ export const POST: APIRoute = async ({
            historial_medico = $6,
            salud_codigo = $7,
            estado_adopcion = $8,
-           foto_blob = COALESCE($9, foto_blob)
-         WHERE id = $10
-           AND usuario_id = $11
-         RETURNING id`,
+           foto_blob = COALESCE($9, foto_blob),
+           raza = $10,
+           edad_meses = $11,
+           sexo = $12,
+           tamano = $13,
+           esterilizado = $14,
+           vacunas_al_dia = $15,
+           ubicacion = $16,
+           requisitos_adopcion = $17
+         WHERE id = $18
+           AND usuario_id = $19`,
         [
           nombre,
           tipo,
@@ -210,44 +482,102 @@ export const POST: APIRoute = async ({
           salud.texto,
           salud.codigo,
           estado,
-          fotoNueva,
+          blobPortada,
+          raza,
+          edadMeses,
+          sexo,
+          tamano,
+          valorBool(esterilizadoTexto),
+          valorBool(vacunasTexto),
+          ubicacion,
+          requisitos || null,
           id,
           usuario.id
         ]
       );
 
-      if (!resultado.rows.length) {
-        if (fotoNueva) {
-          await borrarImagen(fotoNueva)
-            .catch(console.error);
+      // ==========================================
+      // 9. QUITAR FOTOS SELECCIONADAS
+      // ==========================================
+
+      if (idsEliminar.length) {
+        await cliente.query(
+          `DELETE FROM mascotas_fotos
+           WHERE mascota_id = $1
+             AND id = ANY($2::bigint[])`,
+          [id, idsEliminar]
+        );
+      }
+
+      // ==========================================
+      // 10. SUBIR NUEVAS FOTOS A AZURE
+      // ==========================================
+
+      // Buscar posiciones disponibles entre 1 y 4.
+      const ocupadas = new Set(
+        conservadas.map((foto) => Number(foto.orden))
+      );
+
+      for (const nueva of fotosNuevas) {
+        const orden = [1, 2, 3, 4].find(
+          (posicion) => !ocupadas.has(posicion)
+        );
+
+        if (!orden) {
+          throw new Error("No queda espacio para fotografías.");
         }
 
-        return responder({
-          ok: false,
-          mensaje: "Mascota no encontrada."
-        }, 404);
+        const blob = await subirImagen(
+          "mascotas",
+          id,
+          nueva
+        );
+
+        blobsNuevos.push(blob);
+
+        await cliente.query(
+          `INSERT INTO mascotas_fotos
+             (mascota_id, foto_blob, orden)
+           VALUES ($1, $2, $3)`,
+          [id, blob, orden]
+        );
+
+        ocupadas.add(orden);
+      }
+
+      // Confirmar los cambios en PostgreSQL.
+      await cliente.query("COMMIT");
+
+      // Preparar imágenes antiguas para limpiar Azure.
+      blobsAntiguos = seEliminan.map(
+        (foto) => foto.foto_blob
+      );
+
+      if (blobPortada && anterior.foto_blob) {
+        blobsAntiguos.push(String(anterior.foto_blob));
       }
 
     } catch (error) {
-      if (fotoNueva) {
-        await borrarImagen(fotoNueva)
-          .catch(console.error);
-      }
-
+      await cliente.query("ROLLBACK").catch(() => {});
       throw error;
+
+    } finally {
+      cliente.release();
     }
 
-    // Borrar la fotografía reemplazada.
-    const fotoAntigua =
-      anterior.rows[0].foto_blob as string | null;
+    // ==========================================
+    // 11. LIMPIAR IMÁGENES ANTIGUAS
+    // ==========================================
 
-    if (fotoNueva && fotoAntigua) {
-      await borrarImagen(fotoAntigua).catch(error =>
+    // Se eliminan solamente después del COMMIT,
+    // para no perderlas si falla PostgreSQL.
+    for (const blob of blobsAntiguos) {
+      await borrarImagen(blob).catch((error) => {
         console.error(
-          "No se pudo borrar foto anterior:",
+          "No se pudo limpiar la foto antigua de Azure:",
           error
-        )
-      );
+        );
+      });
     }
 
     return responder({
@@ -256,11 +586,28 @@ export const POST: APIRoute = async ({
     });
 
   } catch (error) {
+
+    // Si falló la operación, intentar borrar de Azure
+    // las imágenes nuevas que se hayan subido.
+    for (const blob of blobsNuevos) {
+      await borrarImagen(blob).catch(console.error);
+    }
+
     if (error instanceof ErrorImagen) {
       return responder({
         ok: false,
         mensaje: error.message
       }, 400);
+    }
+
+    if (
+      (error as { constraint?: string }).constraint ===
+      "tenencia_activa"
+    ) {
+      return responder({
+        ok: false,
+        mensaje: "Cierra la tenencia antes de cambiar disponibilidad."
+      }, 409);
     }
 
     console.error("Error editando mascota:", error);

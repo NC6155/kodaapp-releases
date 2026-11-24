@@ -5,10 +5,16 @@ import { db } from "../../../lib/db";
 import { getUsuarioDesdeSesion } from "../../../lib/auth";
 
 import {
+  COMUNAS_BIOBIO,
+  RAZAS_POR_TIPO
+} from "../../../lib/catalogosMascotas";
+
+import {
   validarImagen,
   subirImagen,
   borrarImagen,
-  ErrorImagen
+  ErrorImagen,
+  type ImagenValidada
 } from "../../../lib/azure";
 
 import {
@@ -32,16 +38,11 @@ function responder(
   });
 }
 
-export const POST: APIRoute = async ({
-  request,
-  cookies
-}) => {
+export const POST: APIRoute = async ({ request, cookies }) => {
+
   const origin = request.headers.get("origin");
 
-  if (
-    origin &&
-    origin !== new URL(request.url).origin
-  ) {
+  if (origin && origin !== new URL(request.url).origin) {
     return responder({
       ok: false,
       mensaje: "Origen no permitido."
@@ -49,6 +50,7 @@ export const POST: APIRoute = async ({
   }
 
   try {
+    // Comprobar sesión y permisos
     const usuario = await getUsuarioDesdeSesion(
       cookies.get("session_id")?.value
     );
@@ -69,17 +71,10 @@ export const POST: APIRoute = async ({
 
     const datos = await request.formData();
 
-    const nombre = String(
-      datos.get("nombre") ?? ""
-    ).trim();
-
-    const tipo = String(
-      datos.get("tipoMascota") ?? ""
-    ).trim();
-
-    const descripcion = String(
-      datos.get("descripcion") ?? ""
-    ).trim();
+    // Información básica
+    const nombre = String(datos.get("nombre") ?? "").trim();
+    const tipo = String(datos.get("tipoMascota") ?? "").trim();
+    const descripcion = String(datos.get("descripcion") ?? "").trim();
 
     const personalidad = procesarClasificacion(
       datos.get("personalidadCodigo"),
@@ -96,120 +91,255 @@ export const POST: APIRoute = async ({
     );
 
     if (!nombre || nombre.length > 100) {
-      return responder({
-        ok: false,
-        mensaje: "Nombre inválido."
-      }, 400);
+      return responder({ ok: false, mensaje: "Nombre inválido." }, 400);
     }
 
     if (!["perro", "gato", "otro"].includes(tipo)) {
-      return responder({
-        ok: false,
-        mensaje: "Tipo de mascota inválido."
-      }, 400);
+      return responder({ ok: false, mensaje: "Tipo inválido." }, 400);
     }
 
     if (descripcion.length > 5000) {
-      return responder({
-        ok: false,
-        mensaje: "Descripción demasiado larga."
-      }, 400);
+      return responder({ ok: false, mensaje: "Descripción demasiado larga." }, 400);
     }
 
     if (!personalidad.ok) {
-      return responder({
-        ok: false,
-        mensaje: personalidad.mensaje
-      }, 400);
+      return responder({ ok: false, mensaje: personalidad.mensaje }, 400);
     }
 
     if (!salud.ok) {
+      return responder({ ok: false, mensaje: salud.mensaje }, 400);
+    }
+
+    // Información adicional de la ficha
+
+    const raza = String(datos.get("raza") ?? "").trim();
+
+// Obtener la edad ingresada en el formulario.
+    const edadTexto = String(datos.get("edadMeses") ?? "").trim();
+
+    // Convertir a número o dejar null si no se ingresó.
+    const edadMeses =
+      edadTexto === "" ? null : Number(edadTexto);
+
+    // Validar que sea un número entero entre 0 y 360.
+    if (
+      edadTexto !== "" &&
+      (
+        !/^\d+$/.test(edadTexto) ||
+        edadMeses === null ||
+        !Number.isInteger(edadMeses) ||
+        edadMeses < 0 ||
+        edadMeses > 360
+      )
+    ) {
       return responder({
         ok: false,
-        mensaje: salud.mensaje
+        mensaje: "La edad debe estar entre 0 y 360 meses."
       }, 400);
     }
 
-    const imagen = await validarImagen(
+    
+    const sexo = String(datos.get("sexo") ?? "desconocido");
+    const tamano = String(datos.get("tamano") ?? "desconocido");
+    const ubicacion = String(datos.get("ubicacion") ?? "").trim();
+
+    const requisitos = String(
+      datos.get("requisitosAdopcion") ?? ""
+    ).trim();
+
+    const esterilizadoTexto = String(
+      datos.get("esterilizado") ?? "desconocido"
+    );
+
+    const vacunasTexto = String(
+      datos.get("vacunasAlDia") ?? "desconocido"
+    );
+
+    // ====================================
+    // VALIDAR LONGITUD DE LOS CAMPOS
+    // ====================================
+
+    if (
+      raza.length > 100 ||
+      ubicacion.length > 120 ||
+      requisitos.length > 2000
+    ) {
+      return responder({
+        ok: false,
+        mensaje: "Raza, ubicación o requisitos demasiado largos."
+      }, 400);
+    }
+
+    // ====================================
+    // VALIDAR COMUNA
+    // ====================================
+
+    if (!COMUNAS_BIOBIO.includes(ubicacion)) {
+      return responder({
+        ok: false,
+        mensaje: "Selecciona una comuna válida de la Región del Biobío."
+      }, 400);
+    }
+
+    // ====================================
+    // VALIDAR RAZA SEGÚN TIPO DE MASCOTA
+    // ====================================
+
+    const razasPermitidas = RAZAS_POR_TIPO[tipo] ?? [];
+
+    if (!razasPermitidas.includes(raza)) {
+      return responder({
+        ok: false,
+        mensaje: "Selecciona una raza válida para el tipo de mascota."
+      }, 400);
+    }
+
+
+    const convertirBooleano = (valor: string): boolean | null => {
+      if (valor === "si") return true;
+      if (valor === "no") return false;
+      return null;
+    };
+
+    // Validar fotografía principal
+    const fotoPrincipal = await validarImagen(
       datos.get("foto"),
       true
     );
 
-    // Registrar los datos de la mascota.
-    const resultado = await db.query(
-      `INSERT INTO mascotas (
-         usuario_id,
-         nombre,
-         descripcion,
-         personalidad,
-         personalidad_codigo,
-         historial_medico,
-         salud_codigo,
-         estado_adopcion,
-         tipo_mascota
-       )
-       VALUES (
-         $1, $2, $3, $4, $5,
-         $6, $7, 'disponible', $8
-       )
-       RETURNING id`,
-      [
-        usuario.id,
-        nombre,
-        descripcion || null,
-        personalidad.texto,
-        personalidad.codigo,
-        salud.texto,
-        salud.codigo,
-        tipo
-      ]
+    // Validar galería
+    const archivos = datos.getAll("galeria").filter(
+      (valor) => valor instanceof File && valor.size > 0
     );
 
-    const mascotaId = Number(
-      resultado.rows[0].id
-    );
+    if (archivos.length > 4) {
+      return responder({
+        ok: false,
+        mensaje: "Máximo 4 fotografías adicionales."
+      }, 400);
+    }
 
-    let fotoNueva: string | null = null;
+    const galeria: ImagenValidada[] = [];
+
+    for (const archivo of archivos) {
+      const imagen = await validarImagen(archivo);
+      if (imagen) galeria.push(imagen);
+    }
+
+    // Base de datos + Azure
+    const cliente = await db.connect();
+    const fotosSubidas: string[] = [];
 
     try {
-      if (imagen) {
-        // Subir el archivo a Azure.
-        fotoNueva = await subirImagen(
+      await cliente.query("BEGIN");
+
+      const resultado = await cliente.query(
+        `INSERT INTO mascotas (
+          usuario_id,
+          nombre,
+          descripcion,
+          personalidad,
+          personalidad_codigo,
+          historial_medico,
+          salud_codigo,
+          estado_adopcion,
+          tipo_mascota,
+          raza,
+          edad_meses,
+          sexo,
+          tamano,
+          esterilizado,
+          vacunas_al_dia,
+          ubicacion,
+          requisitos_adopcion
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7,
+          'disponible',
+          $8, $9, $10, $11, $12, $13,
+          $14, $15, $16
+        )
+        RETURNING id`,
+        [
+          usuario.id,
+          nombre,
+          descripcion || null,
+          personalidad.texto,
+          personalidad.codigo,
+          salud.texto,
+          salud.codigo,
+          tipo,
+          raza || null,
+          edadMeses,
+          sexo,
+          tamano,
+          convertirBooleano(esterilizadoTexto),
+          convertirBooleano(vacunasTexto),
+          ubicacion || null,
+          requisitos || null
+        ]
+      );
+
+      const mascotaId = Number(resultado.rows[0].id);
+
+      // Subir portada a Azure
+      if (fotoPrincipal) {
+        const nombreBlob = await subirImagen(
           "mascotas",
           mascotaId,
-          imagen
+          fotoPrincipal
         );
 
-        // Guardar la referencia en PostgreSQL.
-        await db.query(
+        fotosSubidas.push(nombreBlob);
+
+        await cliente.query(
           `UPDATE mascotas
            SET foto_blob = $1
            WHERE id = $2`,
-          [fotoNueva, mascotaId]
+          [nombreBlob, mascotaId]
         );
       }
 
-    } catch (error) {
-      // Intentar revertir una publicación incompleta.
-      if (fotoNueva) {
-        await borrarImagen(fotoNueva)
-          .catch(console.error);
+      // Subir fotografías adicionales
+      for (let i = 0; i < galeria.length; i++) {
+        const nombreBlob = await subirImagen(
+          "mascotas",
+          mascotaId,
+          galeria[i]
+        );
+
+        fotosSubidas.push(nombreBlob);
+
+        await cliente.query(
+          `INSERT INTO mascotas_fotos
+             (mascota_id, foto_blob, orden)
+           VALUES ($1, $2, $3)`,
+          [mascotaId, nombreBlob, i + 1]
+        );
       }
 
-      await db.query(
-        `DELETE FROM mascotas
-         WHERE id = $1 AND usuario_id = $2`,
-        [mascotaId, usuario.id]
-      ).catch(console.error);
+      await cliente.query("COMMIT");
+
+      return responder({
+        ok: true,
+        mensaje: "Mascota publicada correctamente.",
+        mascotaId
+      }, 201);
+
+    } catch (error) {
+      // Revertir los registros si falla la publicación
+      await cliente.query("ROLLBACK").catch(console.error);
+
+      // Intentar eliminar de Azure las fotos ya subidas
+      for (const nombreBlob of fotosSubidas) {
+        await borrarImagen(nombreBlob).catch(console.error);
+      }
 
       throw error;
-    }
 
-    return responder({
-      ok: true,
-      mensaje: "Mascota publicada correctamente.",
-      mascotaId
-    }, 201);
+    } finally {
+      cliente.release();
+    }
 
   } catch (error) {
     if (error instanceof ErrorImagen) {

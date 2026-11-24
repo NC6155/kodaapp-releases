@@ -1,6 +1,7 @@
 
 import type { APIRoute } from "astro";
 import { db } from "../../lib/db";
+import { mensajeErrorCorreo } from "../../lib/correoDiagnostico";
 
 import {
   generarCodigoCorreo,
@@ -155,20 +156,21 @@ export const POST: APIRoute = async ({ request }) => {
     try {
       await enviarCodigoCorreo(correo, codigo);
 
-    } catch (error) {
-      // SMTP falló: la transacción se revierte.
-      // El código anterior permanece válido.
-      await client.query("ROLLBACK");
+    
+      } catch (error) {
+        // Si falla SMTP, revertimos la transacción.
+        await client.query("ROLLBACK");
 
-      console.error("Error de envío SMTP:", error);
+        // El error completo se muestra solo en la terminal.
+        console.error("Error de envío SMTP:", error);
 
-      return json({
-        ok: false,
-        mensaje:
-          "No se pudo enviar el correo. " +
-          "Revisa las credenciales SMTP."
-      }, 503);
-    }
+        // Mostramos al usuario un mensaje entendible.
+        return json({
+          ok: false,
+          mensaje: mensajeErrorCorreo(error)
+        }, 503);
+      }
+
 
     // Los 60 segundos comienzan después de
     // que Gmail acepta el correo.

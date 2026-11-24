@@ -3,6 +3,8 @@ import type { APIRoute } from "astro";
 import { db } from "../../../lib/db";
 import { getUsuarioDesdeSesion } from "../../../lib/auth";
 
+import { comprobarCupo, ReglaAdopcion } from "../../../lib/adopcion";
+
 export const prerender = false;
 
 /**
@@ -12,8 +14,7 @@ export const prerender = false;
  * aprobar  -> estado 'aprobada'
  * rechazar -> estado 'rechazada'
  *
- * No registra adopciones ni cambia el
- * estado de adopción de la mascota.
+ * Una aprobación inicia la tenencia y actualiza la ficha.
  */
 
 function responder(
@@ -84,7 +85,7 @@ export const POST: APIRoute = async ({
   if (
     !Number.isSafeInteger(postulacionId) ||
     postulacionId <= 0 ||
-    !["aprobar", "rechazar"].includes(String(decision))
+    (decision !== "aprobar" && decision !== "rechazar" && decision !== "cerrar")
   ) {
     return responder({
       ok: false,
@@ -128,11 +129,16 @@ export const POST: APIRoute = async ({
       }, 404);
     }
 
+    const organizacion = await conexion.query(
+      "SELECT 1 FROM usuarios WHERE id=$1 AND tipo_usuario='organizacion' AND estado_cuenta='activo' FOR SHARE", [usuario.id]
+    );
+    if (!organizacion.rowCount) throw new ReglaAdopcion("La organización no está activa.", 403);
+
     // Bloquear la postulación que vamos a resolver.
     const consulta = await conexion.query(
       `SELECT
          id,
-         mascota_id,
+         mascota_id, adoptante_id, fin_tenencia,
          estado
        FROM postulaciones
        WHERE id = $1
@@ -151,6 +157,15 @@ export const POST: APIRoute = async ({
 
     const postulacion = consulta.rows[0];
 
+    if (decision === "cerrar") {
+      if (postulacion.estado !== "aprobada" || postulacion.fin_tenencia) {
+        throw new ReglaAdopcion("La postulación no tiene una tenencia activa.");
+      }
+      await conexion.query("UPDATE postulaciones SET fin_tenencia = now() WHERE id = $1", [postulacionId]);
+      await conexion.query("UPDATE mascotas SET estado_adopcion = 'reservada' WHERE id = $1", [postulacion.mascota_id]);
+      await conexion.query("COMMIT");
+      return responder({ ok: true, mensaje: "Tenencia cerrada. La organización puede volver a publicar la mascota." });
+    }
     if (postulacion.estado !== "pendiente") {
       await conexion.query("ROLLBACK");
 
@@ -174,12 +189,14 @@ export const POST: APIRoute = async ({
         }, 409);
       }
 
+      await comprobarCupo(conexion, postulacion.adoptante_id);
+
       // Impedir una segunda postulación aprobada.
       const otraAprobada = await conexion.query(
         `SELECT id
          FROM postulaciones
          WHERE mascota_id = $1
-           AND estado = 'aprobada'
+           AND estado = 'aprobada' AND fin_tenencia IS NULL
          LIMIT 1`,
         [postulacion.mascota_id]
       );
@@ -195,7 +212,13 @@ export const POST: APIRoute = async ({
       }
     }
 
-    // Cambiar únicamente el estado de la postulación.
+    if (nuevoEstado === "aprobada") {
+      await conexion.query("UPDATE mascotas SET estado_adopcion = 'adoptada' WHERE id = $1", [postulacion.mascota_id]);
+      await conexion.query(
+        "UPDATE postulaciones SET estado = 'rechazada', resuelta_en = now() WHERE mascota_id = $1 AND id <> $2 AND estado = 'pendiente'",
+        [postulacion.mascota_id, postulacionId]
+      );
+    }
     await conexion.query(
       `UPDATE postulaciones
        SET estado = $1,
@@ -218,6 +241,7 @@ export const POST: APIRoute = async ({
   } catch (error) {
     await conexion.query("ROLLBACK").catch(() => {});
 
+    if (error instanceof ReglaAdopcion) return responder({ ok: false, mensaje: error.message }, error.status);
     const codigo =
       (error as { code?: string }).code;
 

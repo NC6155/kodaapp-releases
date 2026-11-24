@@ -1,0 +1,282 @@
+
+---
+import Layout from "../layouts/Layout.astro";
+import Header from "../components/Header.astro";
+import { db } from "../lib/db";
+import { getUsuarioDesdeSesion } from "../lib/auth";
+import { agregarFotosMascotas } from "../lib/fotos";
+
+export const prerender = false;
+
+const usuario = await getUsuarioDesdeSesion(
+  Astro.cookies.get("session_id")?.value
+);
+
+if (!usuario) {
+  return Astro.redirect("/login");
+}
+
+if (usuario.tipo_usuario !== "adoptante") {
+  return Astro.redirect("/gestion");
+}
+
+const resultado = await db.query(
+  `SELECT
+     m.id,
+     m.nombre,
+     m.descripcion,
+     m.tipo_mascota,
+     m.ubicacion,
+     m.foto_blob,
+     EXISTS (
+       SELECT 1
+       FROM mascotas_postulables mp
+       WHERE mp.id = m.id
+     ) AS postulable
+   FROM favoritos f
+   JOIN mascotas m ON m.id = f.mascota_id
+   WHERE f.adoptante_id = $1
+   ORDER BY f.guardada_en DESC`,
+  [usuario.id]
+);
+
+const mascotas = agregarFotosMascotas(resultado.rows);
+---
+
+<Layout
+  title="Mis favoritas | KodApp"
+  description="Mascotas guardadas para adoptar más adelante."
+>
+  <Header />
+
+  <main class="favoritos-contenedor">
+
+    <a href="/match" class="volver">
+      ← Volver al Match
+    </a>
+
+    <h1>
+      <i class="fa-solid fa-heart"></i>
+      Mis mascotas favoritas
+    </h1>
+
+    <p>
+      Aquí encontrarás las mascotas que guardaste
+      mientras explorabas el Match.
+    </p>
+
+    {mascotas.length === 0 ? (
+      <section class="sin-favoritos">
+        <i class="fa-solid fa-heart"></i>
+        <h2>Todavía no tienes favoritas</h2>
+
+        <p>
+          Explora el Match y presiona el corazón
+          para guardar una mascota.
+        </p>
+
+        <a href="/match" class="boton">
+          Explorar Match
+        </a>
+      </section>
+    ) : (
+      <div class="favoritos-grid">
+
+        {mascotas.map((mascota) => (
+          <article
+            class="favorito-card"
+            data-favorito={mascota.id}
+          >
+            {mascota.foto ? (
+              <img
+                src={mascota.foto}
+                alt={`Fotografía de ${mascota.nombre}`}
+                loading="lazy"
+              />
+            ) : (
+              <div class="sin-foto">🐾</div>
+            )}
+
+            <div class="favorito-datos">
+              <h2>{mascota.nombre}</h2>
+
+              <p>{mascota.tipo_mascota}</p>
+
+              {mascota.ubicacion && (
+                <p>
+                  <i class="fa-solid fa-location-dot"></i>
+                  {mascota.ubicacion}
+                </p>
+              )}
+
+              {mascota.postulable ? (
+                <div class="favorito-acciones">
+                  <a href={`/mascotas/${mascota.id}`}>
+                    Ver ficha
+                  </a>
+
+                  <a href={`/postular/${mascota.id}`}>
+                    Postular
+                  </a>
+                </div>
+              ) : (
+                <p>
+                  Esta mascota ya no recibe postulaciones.
+                </p>
+              )}
+
+              <button
+                type="button"
+                class="quitar-favorito"
+                data-id={mascota.id}
+              >
+                <i class="fa-solid fa-trash"></i>
+                Quitar de favoritos
+              </button>
+            </div>
+          </article>
+        ))}
+
+      </div>
+    )}
+
+    <p id="favoritos-mensaje" role="status"></p>
+
+  </main>
+</Layout>
+
+<script>
+  document
+    .querySelectorAll<HTMLButtonElement>(".quitar-favorito")
+    .forEach((boton) => {
+
+      boton.addEventListener("click", async () => {
+        boton.disabled = true;
+
+        try {
+          const respuesta = await fetch("/api/favoritos", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              accion: "quitar",
+              mascotaId: Number(boton.dataset.id)
+            })
+          });
+
+          const resultado = await respuesta.json();
+
+          if (!respuesta.ok || !resultado.ok) {
+            throw new Error(
+              resultado.mensaje || "No se pudo quitar."
+            );
+          }
+
+          boton.closest("[data-favorito]")?.remove();
+
+        } catch (error) {
+          boton.disabled = false;
+
+          const mensaje =
+            document.querySelector("#favoritos-mensaje");
+
+          if (mensaje) {
+            mensaje.textContent =
+              error instanceof Error
+                ? error.message
+                : "Error al quitar favorito.";
+          }
+        }
+      });
+    });
+</script>
+
+<style>
+  .favoritos-contenedor {
+    max-width: 1150px;
+    margin: 40px auto;
+    padding: 20px;
+  }
+
+  .favoritos-contenedor h1 {
+    margin: 22px 0;
+  }
+
+  .favoritos-contenedor h1 i {
+    color: #f59e0b;
+  }
+
+  .volver {
+    color: #f59e0b;
+    text-decoration: none;
+  }
+
+  .favoritos-grid {
+    display: grid;
+    grid-template-columns: repeat(
+      auto-fill, minmax(260px, 1fr)
+    );
+    gap: 22px;
+    margin-top: 30px;
+  }
+
+  .favorito-card {
+    background: #242d38;
+    border: 1px solid #485463;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .favorito-card > img,
+  .sin-foto {
+    width: 100%;
+    height: 220px;
+    object-fit: cover;
+  }
+
+  .sin-foto {
+    display: grid;
+    place-items: center;
+    font-size: 55px;
+  }
+
+  .favorito-datos {
+    padding: 20px;
+  }
+
+  .favorito-acciones {
+    display: flex;
+    gap: 10px;
+    margin: 18px 0;
+  }
+
+  .favorito-acciones a,
+  .boton {
+    background: #f59e0b;
+    color: #151515;
+    padding: 10px 14px;
+    border-radius: 9px;
+    text-decoration: none;
+    font-weight: bold;
+  }
+
+  .quitar-favorito {
+    width: 100%;
+    padding: 10px;
+    border-radius: 9px;
+    color: #fff;
+    background: #4a3135;
+    border: 1px solid #a45a62;
+    cursor: pointer;
+  }
+
+  .sin-favoritos {
+    text-align: center;
+    padding: 45px;
+    margin-top: 30px;
+    border: 1px solid #485463;
+    border-radius: 16px;
+  }
+</style>

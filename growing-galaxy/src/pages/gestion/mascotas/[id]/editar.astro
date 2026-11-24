@@ -13,6 +13,9 @@ import ClasificacionMascota from "../../../../components/ClasificacionMascota.as
 import { db } from "../../../../lib/db";
 import { getUsuarioDesdeSesion } from "../../../../lib/auth";
 import { agregarFotosMascotas } from "../../../../lib/fotos";
+import SelectorRazaComuna from "../../../../components/SelectorRazaComuna.astro";
+import GaleriaFormulario from "../../../../components/GaleriaFormulario.astro";
+import EditorRecorteFoto from "../../../../components/EditorRecorteFoto.astro";
 
 export const prerender = false;
 
@@ -34,9 +37,11 @@ if (!Number.isSafeInteger(id) || id <= 0) {
   return Astro.redirect("/gestion/mascotas");
 }
 
+
 const resultado = await db.query(
   `SELECT
      id,
+     foto_blob,
      nombre,
      descripcion,
      personalidad,
@@ -44,21 +49,48 @@ const resultado = await db.query(
      historial_medico,
      salud_codigo,
      tipo_mascota,
-     estado_adopcion
+     estado_adopcion,
+     publicada,
+     raza,
+     edad_meses,
+     sexo,
+     tamano,
+     esterilizado,
+     vacunas_al_dia,
+     ubicacion,
+     requisitos_adopcion
    FROM mascotas
    WHERE id = $1
      AND usuario_id = $2`,
   [id, usuario.id]
 );
 
+
 if (resultado.rows.length === 0) {
   return Astro.redirect("/gestion/mascotas");
 }
 
 const mascotas =
-  await agregarFotosMascotas(resultado.rows);
+  agregarFotosMascotas(resultado.rows);
 
 const mascota = mascotas[0];
+
+
+  // Fotografías adicionales guardadas en Azure.
+  // PostgreSQL almacena únicamente sus referencias.
+const resultadoGaleria = await db.query(
+    `SELECT id, orden
+    FROM mascotas_fotos
+    WHERE mascota_id = $1
+    ORDER BY orden ASC`,
+    [id]
+);
+
+const fotosGaleria = resultadoGaleria.rows as {
+    id: number;
+    orden: number;
+}[];
+
 ---
 
 <Layout
@@ -157,6 +189,11 @@ const mascota = mascotas[0];
               type="file"
               accept="image/jpeg,image/png,image/webp"
               hidden
+            />
+            <EditorRecorteFoto
+              inputId="foto"
+              previewId="preview-container"
+              forma="cuadrado"
             />
 
             <small>
@@ -269,6 +306,182 @@ const mascota = mascotas[0];
           saludCodigo={mascota.salud_codigo}
         />
 
+<!-- CARACTERÍSTICAS ADICIONALES -->
+
+      <section class="form-section">
+        <div class="form-section-header">
+          <span class="form-step">05</span>
+          <div>
+            <h2>Características de la mascota</h2>
+            <p>Actualiza los datos que verán los adoptantes.</p>
+          </div>
+        </div>
+
+        <div class="form-grid">
+
+          <!-- Mismos desplegables que al publicar -->
+          <SelectorRazaComuna
+            tipoId="tipoMascota"
+            razaActual={mascota.raza}
+            ubicacionActual={mascota.ubicacion}
+          />
+
+          <div class="form-field">
+            <label for="edadMeses">Edad aproximada (meses)</label>
+            <input
+              id="edadMeses"
+              type="number"
+              name="edadMeses"
+              min="0"
+              max="360"
+              step="1"
+              value={mascota.edad_meses ?? ""}
+            />
+            <small>12 meses equivalen a un año.</small>
+          </div>
+
+          <div class="form-field">
+            <label for="sexo">Sexo</label>
+            <select id="sexo" name="sexo">
+              <option
+                value="desconocido"
+                selected={!mascota.sexo || mascota.sexo === "desconocido"}
+              >
+                Sin especificar
+              </option>
+              <option value="macho" selected={mascota.sexo === "macho"}>
+                Macho
+              </option>
+              <option value="hembra" selected={mascota.sexo === "hembra"}>
+                Hembra
+              </option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="tamano">Tamaño</label>
+            <select id="tamano" name="tamano">
+              <option
+                value="desconocido"
+                selected={!mascota.tamano || mascota.tamano === "desconocido"}
+              >
+                Sin especificar
+              </option>
+              <option value="pequeno" selected={mascota.tamano === "pequeno"}>
+                Pequeño
+              </option>
+              <option value="mediano" selected={mascota.tamano === "mediano"}>
+                Mediano
+              </option>
+              <option value="grande" selected={mascota.tamano === "grande"}>
+                Grande
+              </option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="esterilizado">¿Está esterilizada?</label>
+            <select id="esterilizado" name="esterilizado">
+              <option
+                value="desconocido"
+                selected={mascota.esterilizado == null}
+              >
+                No se sabe
+              </option>
+              <option value="si" selected={mascota.esterilizado === true}>
+                Sí
+              </option>
+              <option value="no" selected={mascota.esterilizado === false}>
+                No
+              </option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="vacunasAlDia">¿Tiene las vacunas al día?</label>
+            <select id="vacunasAlDia" name="vacunasAlDia">
+              <option
+                value="desconocido"
+                selected={mascota.vacunas_al_dia == null}
+              >
+                No se sabe
+              </option>
+              <option value="si" selected={mascota.vacunas_al_dia === true}>
+                Sí
+              </option>
+              <option value="no" selected={mascota.vacunas_al_dia === false}>
+                No
+              </option>
+            </select>
+          </div>
+
+          <div class="form-field form-field-full">
+            <label for="requisitosAdopcion">
+              Requisitos de adopción
+            </label>
+            <textarea
+              id="requisitosAdopcion"
+              name="requisitosAdopcion"
+              maxlength="2000"
+              rows="4"
+              placeholder="Ej.: Tener espacio y tiempo para sus cuidados"
+            >{mascota.requisitos_adopcion ?? ""}</textarea>
+          </div>
+
+        </div>
+      </section>
+
+
+      
+        <!-- FOTOGRAFÍAS EXISTENTES -->
+
+        <section class="form-section">
+          <div class="form-section-header">
+            <span class="form-step">06</span>
+            <div>
+              <h2>Fotografías actuales</h2>
+              <p>
+                Selecciona las fotos que quieras quitar.
+                Los cambios se aplicarán al guardar.
+              </p>
+            </div>
+          </div>
+
+          {fotosGaleria.length === 0 ? (
+            <p class="galeria-vacia">
+              Esta mascota no tiene fotografías adicionales.
+            </p>
+          ) : (
+            <div class="galeria-existente">
+
+              {fotosGaleria.map((foto) => (
+                <label class="foto-existente">
+                  <img
+                    src={`/api/fotos/galeria/${foto.id}`}
+                    alt={`Fotografía adicional ${foto.orden}`}
+                    loading="lazy"
+                  />
+
+                  <span class="foto-quitar">
+                    <input
+                      type="checkbox"
+                      name="fotosEliminar"
+                      value={foto.id}
+                    />
+                    Quitar al guardar
+                  </span>
+                </label>
+              ))}
+
+            </div>
+          )}
+        </section>
+
+        <!-- NUEVAS FOTOGRAFÍAS -->
+
+        <GaleriaFormulario />
+
+
 
         <!-- ESTADO DE ADOPCIÓN -->
 
@@ -353,7 +566,7 @@ const mascota = mascotas[0];
             class="btn-eliminar-publicacion"
           >
             <i class="fa-solid fa-trash"></i>
-            Eliminar publicación
+            Ocultar publicación
           </button>
 
           <a
@@ -387,15 +600,6 @@ const mascota = mascotas[0];
       "#editar-mascota-form"
     );
 
-  const fotoInput =
-    document.querySelector<HTMLInputElement>(
-      "#foto"
-    );
-
-  const preview =
-    document.querySelector<HTMLElement>(
-      "#preview-container"
-    );
 
   const mensaje =
     document.querySelector<HTMLElement>(
@@ -417,36 +621,7 @@ const mascota = mascotas[0];
   // VISTA PREVIA DE LA FOTO
   // ==========================================
 
-  fotoInput?.addEventListener("change", () => {
-    const archivo = fotoInput.files?.[0];
 
-    if (!archivo || !preview) return;
-
-    if (
-      !["image/jpeg", "image/png", "image/webp"]
-        .includes(archivo.type) ||
-      archivo.size > 5 * 1024 * 1024
-    ) {
-      alert(
-        "Selecciona una imagen JPG, PNG o WebP de hasta 5 MB."
-      );
-
-      fotoInput.value = "";
-      return;
-    }
-
-    const url = URL.createObjectURL(archivo);
-    const imagen = document.createElement("img");
-
-    imagen.src = url;
-    imagen.alt = "Nueva fotografía";
-
-    imagen.onload = () => {
-      URL.revokeObjectURL(url);
-    };
-
-    preview.replaceChildren(imagen);
-  });
 
 
   // ==========================================
@@ -463,6 +638,34 @@ const mascota = mascotas[0];
     if (!form.reportValidity()) {
       return;
     }
+
+    // Contar las fotografías actuales que se conservarán.
+    const casillas = Array.from(
+      form.querySelectorAll<HTMLInputElement>(
+        'input[name="fotosEliminar"]'
+      )
+    );
+
+    const fotosConservadas = casillas.filter(
+      (casilla) => !casilla.checked
+    ).length;
+
+    // Contar las nuevas fotografías seleccionadas.
+    const entradaGaleria =
+      form.querySelector<HTMLInputElement>("#galeria");
+
+    const nuevasFotos = entradaGaleria?.files?.length ?? 0;
+
+    // La galería admite máximo 4 fotos adicionales.
+    if (fotosConservadas + nuevasFotos > 4) {
+      mensaje.textContent =
+        `Puedes tener máximo 4 fotografías adicionales. ` +
+        `Actualmente conservarías ${fotosConservadas} ` +
+        `y agregarías ${nuevasFotos}.`;
+
+      return;
+    }
+
 
     botonGuardar.disabled = true;
     mensaje.textContent = "Guardando cambios...";
@@ -528,9 +731,9 @@ const mascota = mascotas[0];
     }
 
     const confirmado = window.confirm(
-      "¿Estás seguro de eliminar esta publicación?\n\n" +
-      "También se eliminará su fotografía.\n" +
-      "Esta acción no se puede deshacer."
+      "¿Quieres ocultar esta mascota del catálogo?\n\n" +
+      "No aparecerá en Mascotas disponibles ni en Match.\n" +
+      "Las postulaciones, los datos y las fotografías se conservarán para consevar el historial"
     );
 
     if (!confirmado) {
@@ -543,7 +746,7 @@ const mascota = mascotas[0];
       botonGuardar.disabled = true;
     }
 
-    mensaje.textContent = "Eliminando publicación...";
+    mensaje.textContent = "Ocultando publicación...";
 
     try {
       const respuesta = await fetch(
@@ -588,3 +791,59 @@ const mascota = mascotas[0];
     }
   });
 </script>
+
+
+<style>
+  .galeria-existente {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+  }
+
+  .foto-existente {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid #4b5563;
+    border-radius: 14px;
+    background: #222b36;
+    cursor: pointer;
+  }
+
+  .foto-existente img {
+    width: 100%;
+    height: 165px;
+    object-fit: cover;
+  }
+
+  .foto-quitar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    font-size: 13px;
+    color: #f5f5f5;
+  }
+
+  .foto-quitar input {
+    width: 17px;
+    height: 17px;
+    accent-color: #e45d6f;
+  }
+
+  .foto-existente:has(input:checked) {
+    border-color: #e45d6f;
+    opacity: 0.65;
+  }
+
+  .galeria-vacia {
+    color: #aeb8c6;
+  }
+
+  @media (max-width: 600px) {
+    .galeria-existente {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+</style>

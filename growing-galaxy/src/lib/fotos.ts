@@ -33,31 +33,9 @@ export async function obtenerFotoPerfil(
   );
 }
 
-export async function agregarFotosMascotas<
-  T extends { id: number }
->(
-  mascotas: T[]
-): Promise<Array<T & { foto: string | null }>> {
-  if (!mascotas.length) return [];
-
-  const resultado = await db.query(
-    `SELECT id, foto_blob
-     FROM mascotas
-     WHERE id = ANY($1::integer[])`,
-    [mascotas.map(m => Number(m.id))]
-  );
-
-  const fotos = new Map<number, string | null>();
-
-  for (const fila of resultado.rows) {
-    fotos.set(
-      Number(fila.id),
-      urlFotoMascota(Number(fila.id), fila.foto_blob)
-    );
-  }
-
-  return mascotas.map(mascota => ({
+export function agregarFotosMascotas<T extends { id: number; foto_blob: string | null }>(mascotas: T[]) {
+  return mascotas.map(({ foto_blob, ...mascota }) => ({
     ...mascota,
-    foto: fotos.get(Number(mascota.id)) ?? null
+    foto: urlFotoMascota(Number(mascota.id), foto_blob)
   }));
 }

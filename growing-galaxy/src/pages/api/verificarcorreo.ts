@@ -26,6 +26,7 @@ const json = (data: unknown, status = 200) =>
 export const POST: APIRoute = async ({ request }) => {
   const data = await request.json().catch(() => ({}));
 
+  if (!data || typeof data !== "object" || Array.isArray(data)) return json({ok:false, mensaje:"Solicitud inválida."},400);
   const correo =
     typeof data.correo === "string"
       ? data.correo.trim().toLowerCase()

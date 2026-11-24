@@ -42,16 +42,26 @@ const consultaPreferencias = await db.query(
   SELECT
     tipo_preferido,
     personalidad_preferida,
-    nivel_cuidados
+    nivel_cuidados,
+    comuna_preferida
   FROM preferencias_match
   WHERE usuario_id = $1
   `,
   [usuario.id]
 );
 
+
+type PreferenciasConComuna = PreferenciasMatch & {
+  comuna_preferida: string | null;
+};
+
 const preferencias = (
   consultaPreferencias.rows[0] ?? null
-) as PreferenciasMatch | null;
+) as PreferenciasConComuna | null;
+
+const ampliarRegion =
+  Astro.url.searchParams.get("region") === "1";
+
 
 // ==========================================
 // TIPOS DE DATOS
@@ -65,6 +75,7 @@ type TarjetaMatch = {
   tipo_mascota: string;
   personalidad: string | null;
   historial_medico: string | null;
+  ubicacion: string | null;
   personalidad_codigo: string | null;
   salud_codigo: string | null;
   match: ResultadoMatch;
@@ -76,50 +87,81 @@ type TarjetaMatch = {
 
 let tarjetas: TarjetaMatch[] = [];
 
-if (preferencias) {
 
-  const consultaMascotas = await db.query(
-    `
-    SELECT
-      id,
-      nombre,
-      descripcion,
-      tipo_mascota,
-      personalidad,
-      personalidad_codigo,
-      historial_medico,
-      salud_codigo
-    FROM mascotas
-    WHERE estado_adopcion = 'disponible'
-    ORDER BY id DESC
-    `
-  );
+  if (preferencias) {
 
-  const mascotasConFotos =
-    await agregarFotosMascotas(
-      consultaMascotas.rows
+    // Por defecto, mostrar solo la comuna elegida.
+    // Si se amplía la búsqueda, mostrar toda la región.
+    const comunaBuscada =
+      ampliarRegion
+        ? null
+        : preferencias.comuna_preferida || null;
+
+    const consultaMascotas = await db.query(
+      `SELECT
+        id,
+        foto_blob,
+        nombre,
+        descripcion,
+        tipo_mascota,
+        personalidad,
+        personalidad_codigo,
+        historial_medico,
+        salud_codigo,
+        ubicacion
+      FROM mascotas_postulables
+      WHERE (
+        $1::text IS NULL
+        OR ubicacion = $1
+      )
+      ORDER BY id DESC`,
+      [comunaBuscada]
     );
 
-  tarjetas = mascotasConFotos
-    .map((mascota) => ({
-      ...mascota,
+    const mascotasConFotos =
+      agregarFotosMascotas(consultaMascotas.rows);
 
-      match: calcularCompatibilidad(
-        preferencias,
-        mascota
-      )
-    }))
-    .sort((a, b) => {
+    tarjetas = mascotasConFotos
+      .map((mascota) => ({
+        ...mascota,
 
-      const porcentajeA =
-        a.match.porcentaje ?? -1;
+        match: calcularCompatibilidad(
+          preferencias,
+          mascota
+        )
+      }))
+      .sort((a, b) => {
 
-      const porcentajeB =
-        b.match.porcentaje ?? -1;
+        // Al ampliar la región, priorizar la comuna
+        // preferida sin excluir las demás.
+        if (
+          ampliarRegion &&
+          preferencias.comuna_preferida
+        ) {
+          const localA =
+            a.ubicacion === preferencias.comuna_preferida
+              ? 1 : 0;
 
-      return porcentajeB - porcentajeA;
-    });
-}
+          const localB =
+            b.ubicacion === preferencias.comuna_preferida
+              ? 1 : 0;
+
+          if (localA !== localB) {
+            return localB - localA;
+          }
+        }
+
+        // Mantener el orden por compatibilidad.
+        const porcentajeA =
+          a.match.porcentaje ?? -1;
+
+        const porcentajeB =
+          b.match.porcentaje ?? -1;
+
+        return porcentajeB - porcentajeA;
+      });
+  }
+
 
 // ==========================================
 // TEXTOS DE COMPATIBILIDAD
@@ -172,7 +214,7 @@ function mensajeNivel(
 }
 ---
 
-<Layout title="Mi Match | KodApp" description="Conoce mascotas compatibles con tus preferencias.">
+<Layout title="Mi Match | KodaApp" description="Conoce mascotas compatibles con tus preferencias.">
   <Header />
 
   <main class="ka-match-page">
@@ -224,6 +266,35 @@ function mensajeNivel(
         </section>
       ) : (
         <>
+
+          <div class="ka-match-ubicacion">
+            <div>
+              <i class="fa-solid fa-location-dot"></i>
+
+              {ampliarRegion || !preferencias.comuna_preferida ? (
+                <span>
+                  Buscando en toda la Región del Biobío
+                </span>
+              ) : (
+                <span>
+                  Mostrando mascotas de
+                  <strong> {preferencias.comuna_preferida}</strong>
+                </span>
+              )}
+            </div>
+
+            {preferencias.comuna_preferida && (
+              <a
+                href={ampliarRegion ? "/match" : "/match?region=1"}
+                class="ka-match-edit"
+              >
+                {ampliarRegion
+                  ? "Buscar solo en mi comuna"
+                  : "Explorar toda la región"}
+              </a>
+            )}
+          </div>
+
           <div class="ka-match-toolbar">
             <div>
               <span class="ka-match-kicker">
@@ -241,6 +312,11 @@ function mensajeNivel(
               Mis preferencias
             </a>
           </div>
+          
+          <a class="ka-match-edit" href="/favoritos">
+            <i class="fa-solid fa-heart"></i>
+            Mis favoritas
+          </a>
 
           {tarjetas.length === 0 ? (
             <section class="ka-match-empty">
@@ -251,6 +327,11 @@ function mensajeNivel(
               <h2>
                 Por ahora no hay mascotas disponibles
               </h2>
+              {!ampliarRegion && preferencias.comuna_preferida && (
+                <a class="ka-match-action" href="/match?region=1">
+                  Ver mascotas de otras comunas
+                </a>
+              )}
 
               <p>
                 Vuelve a visitarnos para descubrir
@@ -335,6 +416,12 @@ function mensajeNivel(
 
                       <div class="ka-match-photo-heading">
                         <h3>{mascota.nombre}</h3>
+                        {mascota.ubicacion && (
+                          <p class="ka-match-comuna">
+                            <i class="fa-solid fa-location-dot"></i>
+                            {mascota.ubicacion}
+                          </p>
+                        )}
 
                         <span>
                           <i class="fa-solid fa-paw"></i>
@@ -500,11 +587,17 @@ function mensajeNivel(
                   class="ka-match-control ka-match-control--like"
                   id="ka-match-like"
                   type="button"
-                  aria-label="Me gusta esta mascota y continuar"
+                  aria-label="Guardar mascota en favoritos y continuar"
                 >
                   <i class="fa-solid fa-heart"></i>
                 </button>
               </div>
+              <p
+                  id="ka-match-save-message"
+                  class="ka-match-note"
+                  role="status"
+                  aria-live="polite"
+              ></p>
 
               <p class="ka-match-hint">
                 <i class="fa-solid fa-hand-pointer"></i>
@@ -514,9 +607,8 @@ function mensajeNivel(
               </p>
 
               <p class="ka-match-note" role="note">
-                El corazón solo avanza a la siguiente mascota.
-                Para iniciar una solicitud, pulsa
-                <strong>Conocer y postular</strong>.
+                <strong>El corazón guarda la mascota en favoritos.</strong>
+                Podrás revisar tus favoritas y postular más adelante.
               </p>
             </section>
           )}
@@ -570,6 +662,9 @@ function mensajeNivel(
 
     const restart =
       document.querySelector<HTMLButtonElement>('#ka-match-restart');
+      
+    const saveMessage =
+      document.querySelector<HTMLElement>('#ka-match-save-message');
 
     let current = 0;
     let busy = false;
@@ -645,23 +740,83 @@ function mensajeNivel(
     // DESLIZAR IZQUIERDA O DERECHA
     // =====================================
 
-    const swipe = (direction: -1 | 1) => {
+    
+    const swipe = async (direction: -1 | 1) => {
       if (busy || current >= cards.length) return;
 
       const card = cards[current];
 
+      // Si desliza a la derecha o pulsa corazón,
+      // guardar primero en PostgreSQL.
+      if (direction === 1) {
+        busy = true;
+
+        if (saveMessage) {
+          saveMessage.textContent = "Guardando mascota...";
+        }
+
+        try {
+          const respuesta = await fetch("/api/favoritos", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              accion: "guardar",
+              mascotaId: Number(card.dataset.petId)
+            })
+          });
+
+          const resultado = await respuesta.json().catch(
+            () => null
+          );
+
+          if (respuesta.status === 401) {
+            window.location.href = "/login";
+            return;
+          }
+
+          if (!respuesta.ok || !resultado?.ok) {
+            throw new Error(
+              resultado?.mensaje || "No se pudo guardar."
+            );
+          }
+
+          if (saveMessage) {
+            saveMessage.textContent =
+              "¡Guardada! Puedes postular desde Mis favoritas.";
+          }
+
+        } catch (error) {
+          busy = false;
+
+          if (saveMessage) {
+            saveMessage.textContent =
+              error instanceof Error
+                ? error.message
+                : "Error al guardar la mascota.";
+          }
+
+          // Mantener la tarjeta si falla el guardado.
+          paint();
+          return;
+        }
+      }
+
+      // Avanzar a la siguiente tarjeta.
       busy = true;
 
-      card.classList.remove('is-dragging');
-      card.classList.add('is-leaving');
+      card.classList.remove("is-dragging");
+      card.classList.add("is-leaving");
 
       card.style.transform =
         `translate3d(${direction * Math.max(window.innerWidth, 600)}px,-45px,0) rotate(${direction * 18}deg)`;
 
-      card.style.opacity = '0';
+      card.style.opacity = "0";
 
       window.setTimeout(() => {
-        card.classList.remove('is-leaving');
+        card.classList.remove("is-leaving");
 
         current += 1;
         busy = false;
@@ -669,6 +824,7 @@ function mensajeNivel(
         paint();
       }, 270);
     };
+
 
     // =====================================
     // RESTABLECER POSICIÓN DE TARJETA
@@ -876,3 +1032,31 @@ function mensajeNivel(
     paint();
   }
 </script>
+
+<style>
+  .ka-match-ubicacion {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    padding: 16px 20px;
+    margin: 20px 0;
+    background: #242d38;
+    color: #f5f5f5;
+    border: 1px solid #4a5564;
+    border-radius: 14px;
+  }
+
+  .ka-match-ubicacion i,
+  .ka-match-comuna i {
+    color: #f59e0b;
+    margin-right: 7px;
+  }
+
+  .ka-match-comuna {
+    color: #f5f5f5;
+    font-size: 13px;
+    margin: 6px 0;
+  }
+</style>
