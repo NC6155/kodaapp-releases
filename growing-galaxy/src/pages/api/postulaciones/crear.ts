@@ -75,6 +75,19 @@ export const POST: APIRoute = async ({
   try {
     await conexion.query("BEGIN");
 
+    // Bloquear al adoptante durante la postulación.
+    // Evita que dos solicitudes simultáneas superen
+    // los límites establecidos.
+    await conexion.query(
+      `SELECT id
+      FROM usuarios
+      WHERE id = $1
+      FOR UPDATE`,
+      [usuario.id]
+    );
+
+    
+
     // Bloquea la mascota durante el registro para
     // evitar decisiones simultáneas incompatibles.
     const consultaMascota = await conexion.query(
@@ -122,6 +135,55 @@ export const POST: APIRoute = async ({
       throw new ReglaAdopcion("La organización está suspendida.", 403);
     }
     await comprobarCupo(conexion, usuario.id);
+
+    // ==========================================
+    // LÍMITE DE POSTULACIONES DEL ADOPTANTE
+    // ==========================================
+
+    const MAX_PENDIENTES = 3;
+    const MAX_DIARIAS = 3;
+
+    const consultaLimites = await conexion.query(
+      `SELECT
+        COUNT(*) FILTER (
+          WHERE estado = 'pendiente'
+        )::integer AS pendientes,
+
+        COUNT(*) FILTER (
+          WHERE
+            (creada_en AT TIME ZONE 'America/Santiago')::date =
+            (CURRENT_TIMESTAMP AT TIME ZONE 'America/Santiago')::date
+        )::integer AS enviadas_hoy
+
+      FROM postulaciones
+      WHERE adoptante_id = $1`,
+      [usuario.id]
+    );
+
+    const pendientes = Number(
+      consultaLimites.rows[0].pendientes
+    );
+
+    const enviadasHoy = Number(
+      consultaLimites.rows[0].enviadas_hoy
+    );
+
+    // Máximo tres pendientes al mismo tiempo.
+    if (pendientes >= MAX_PENDIENTES) {
+      throw new ReglaAdopcion(
+        "Ya tienes 3 postulaciones pendientes. Espera una respuesta o retira una solicitud antes de postular nuevamente.",
+        409
+      );
+    }
+
+    // Máximo tres postulaciones enviadas por día.
+    if (enviadasHoy >= MAX_DIARIAS) {
+      throw new ReglaAdopcion(
+        "Alcanzaste el límite de 3 postulaciones diarias. Podrás volver a postular mañana.",
+        429
+      );
+    }
+
 
     // Una postulación aprobada cierra nuevas
     // solicitudes para esa mascota.
