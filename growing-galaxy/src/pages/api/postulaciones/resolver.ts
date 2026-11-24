@@ -103,6 +103,45 @@ export const POST: APIRoute = async ({
   try {
     await conexion.query("BEGIN");
 
+    // ==========================================
+    // BLOQUEAR AL ADOPTANTE ANTES DE LA MASCOTA
+    // ==========================================
+
+    // Comprobar que la postulación pertenece
+    // a una mascota de esta organización.
+    const referencia = await conexion.query(
+      `SELECT p.adoptante_id
+      FROM postulaciones p
+      JOIN mascotas m ON m.id = p.mascota_id
+      WHERE p.id = $1
+        AND m.usuario_id = $2`,
+      [postulacionId, usuario.id]
+    );
+
+    if (referencia.rows.length === 0) {
+      await conexion.query("ROLLBACK");
+
+      return responder({
+        ok: false,
+        mensaje:
+          "La postulación no existe o no corresponde a tu organización."
+      }, 404);
+    }
+
+    // Al aprobar, bloquear primero al adoptante.
+    // Así distintas organizaciones no pueden
+    // superar el cupo mediante aprobaciones simultáneas.
+    if (decision === "aprobar") {
+      await conexion.query(
+        `SELECT id
+        FROM usuarios
+        WHERE id = $1
+        FOR UPDATE`,
+        [referencia.rows[0].adoptante_id]
+      );
+    }
+
+
     // Bloquear la mascota de esta postulación.
     // Así dos decisiones simultáneas no pueden
     // aprobar solicitudes incompatibles.
