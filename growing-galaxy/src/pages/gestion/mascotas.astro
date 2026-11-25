@@ -322,20 +322,34 @@ const resultado = await db.query(
 
                   </div>
 
+                  
                   <div class="management-pet-actions">
 
-                    
-                    <div class="management-pet-actions">
-                      <a
-                        href={`/gestion/mascotas/${mascota.id}/editar`}
-                        class="btn-outline"
-                      >
-                        <i class="fa-solid fa-pen"></i>
-                        Editar publicación
-                      </a>
-                    </div>
+                    <a
+                      href={`/gestion/mascotas/${mascota.id}/editar`}
+                      class="btn-outline"
+                    >
+                      <i class="fa-solid fa-pen"></i>
+                      Editar publicación
+                    </a>
+
+                    {
+                      estadoActual === "ocultas" &&
+                      mascota.publicada === false &&
+                      mascota.estado_adopcion === "disponible" && (
+                        <button
+                          type="button"
+                          class="btn-primary boton-republicar"
+                          data-id={mascota.id}
+                        >
+                          <i class="fa-solid fa-eye"></i>
+                          Volver a publicar
+                        </button>
+                      )
+                    }
 
                   </div>
+
 
                 </div>
               </article>

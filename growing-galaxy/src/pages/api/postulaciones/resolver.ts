@@ -203,7 +203,7 @@ export const POST: APIRoute = async ({
         throw new ReglaAdopcion("La postulación no tiene una tenencia activa.");
       }
       await conexion.query("UPDATE postulaciones SET fin_tenencia = now() WHERE id = $1", [postulacionId]);
-      await conexion.query("UPDATE mascotas SET estado_adopcion = 'reservada' WHERE id = $1", [postulacion.mascota_id]);
+      await conexion.query(`UPDATE mascotas SET estado_adopcion = 'disponible', publicada = FALSE WHERE id = $1`, [postulacion.mascota_id]);
       await conexion.query("COMMIT");
       try {
         const informacion = await db.query(
