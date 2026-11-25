@@ -9,7 +9,7 @@ export function mensajeErrorCorreo(error: unknown): string {
   if (e?.responseCode === 535 || e?.code === "EAUTH") {
     return (
       "Gmail rechazó las credenciales de la cuenta " +
-      "que utiliza KodApp para enviar correos. " +
+      "que utiliza KodaApp para enviar correos. " +
       "Revisa SMTP_USER y la contraseña de aplicación " +
       "SMTP_APP_PASSWORD en el archivo .env."
     );
@@ -40,7 +40,7 @@ export function mensajeErrorCorreo(error: unknown): string {
 
   // Error no identificado.
   return (
-    "No se pudo enviar el correo desde KodApp. " +
+    "No se pudo enviar el correo desde KodaApp. " +
     "Revisa la configuración SMTP del servidor."
   );
 }

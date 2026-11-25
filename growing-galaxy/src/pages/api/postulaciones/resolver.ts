@@ -2,7 +2,7 @@
 import type { APIRoute } from "astro";
 import { db } from "../../../lib/db";
 import { getUsuarioDesdeSesion } from "../../../lib/auth";
-
+import { enviarAvisoKodaApp } from "../../../lib/notificacionesCorreo";
 import { comprobarCupo, ReglaAdopcion } from "../../../lib/adopcion";
 
 export const prerender = false;
@@ -99,9 +99,49 @@ export const POST: APIRoute = async ({
       : "rechazada";
 
   const conexion = await db.connect();
+  let rechazadosAutomaticamente: number[] = [];
 
   try {
     await conexion.query("BEGIN");
+
+    // ==========================================
+    // BLOQUEAR AL ADOPTANTE ANTES DE LA MASCOTA
+    // ==========================================
+
+    // Comprobar que la postulación pertenece
+    // a una mascota de esta organización.
+    const referencia = await conexion.query(
+      `SELECT p.adoptante_id
+      FROM postulaciones p
+      JOIN mascotas m ON m.id = p.mascota_id
+      WHERE p.id = $1
+        AND m.usuario_id = $2`,
+      [postulacionId, usuario.id]
+    );
+
+    if (referencia.rows.length === 0) {
+      await conexion.query("ROLLBACK");
+
+      return responder({
+        ok: false,
+        mensaje:
+          "La postulación no existe o no corresponde a tu organización."
+      }, 404);
+    }
+
+    // Al aprobar, bloquear primero al adoptante.
+    // Así distintas organizaciones no pueden
+    // superar el cupo mediante aprobaciones simultáneas.
+    if (decision === "aprobar") {
+      await conexion.query(
+        `SELECT id
+        FROM usuarios
+        WHERE id = $1
+        FOR UPDATE`,
+        [referencia.rows[0].adoptante_id]
+      );
+    }
+
 
     // Bloquear la mascota de esta postulación.
     // Así dos decisiones simultáneas no pueden
@@ -109,7 +149,8 @@ export const POST: APIRoute = async ({
     const mascota = await conexion.query(
       `SELECT
          m.id,
-         m.estado_adopcion
+         m.estado_adopcion,
+         m.publicada
        FROM mascotas m
        JOIN postulaciones p
          ON p.mascota_id = m.id
@@ -162,8 +203,42 @@ export const POST: APIRoute = async ({
         throw new ReglaAdopcion("La postulación no tiene una tenencia activa.");
       }
       await conexion.query("UPDATE postulaciones SET fin_tenencia = now() WHERE id = $1", [postulacionId]);
-      await conexion.query("UPDATE mascotas SET estado_adopcion = 'reservada' WHERE id = $1", [postulacion.mascota_id]);
+      await conexion.query(`UPDATE mascotas SET estado_adopcion = 'disponible', publicada = FALSE WHERE id = $1`, [postulacion.mascota_id]);
       await conexion.query("COMMIT");
+      try {
+        const informacion = await db.query(
+          `SELECT
+            u.correo,
+            m.nombre AS mascota
+          FROM postulaciones p
+          JOIN usuarios u ON u.id = p.adoptante_id
+          JOIN mascotas m ON m.id = p.mascota_id
+          WHERE p.id = $1`,
+          [postulacionId]
+        );
+
+        const aviso = informacion.rows[0];
+
+        if (aviso?.correo) {
+          await enviarAvisoKodaApp({
+            para: aviso.correo,
+            asunto: "Tenencia finalizada",
+            titulo: "Actualización de tu adopción",
+            mensaje:
+              "La organización ha registrado la finalización " +
+              "de la tenencia en KodaApp. Puedes consultar " +
+              "el historial desde tu cuenta.",
+            detalle: `Mascota: ${aviso.mascota}`
+          });
+        }
+
+      } catch (error) {
+        console.error(
+          "Error notificando cierre de tenencia:",
+          error
+        );
+      }
+
       return responder({ ok: true, mensaje: "Tenencia cerrada. La organización puede volver a publicar la mascota." });
     }
     if (postulacion.estado !== "pendiente") {
@@ -188,6 +263,12 @@ export const POST: APIRoute = async ({
             "La mascota ya no está disponible."
         }, 409);
       }
+        if (mascota.rows[0].publicada !== true) {
+          throw new ReglaAdopcion(
+            "No puedes aprobar una postulación de una mascota oculta.",
+            409
+          );
+}
 
       await comprobarCupo(conexion, postulacion.adoptante_id);
 
@@ -214,10 +295,22 @@ export const POST: APIRoute = async ({
 
     if (nuevoEstado === "aprobada") {
       await conexion.query("UPDATE mascotas SET estado_adopcion = 'adoptada' WHERE id = $1", [postulacion.mascota_id]);
-      await conexion.query(
-        "UPDATE postulaciones SET estado = 'rechazada', resuelta_en = now() WHERE mascota_id = $1 AND id <> $2 AND estado = 'pendiente'",
+      
+      const rechazadas = await conexion.query(
+        `UPDATE postulaciones
+        SET estado = 'rechazada',
+            resuelta_en = NOW()
+        WHERE mascota_id = $1
+          AND id <> $2
+          AND estado = 'pendiente'
+        RETURNING adoptante_id`,
         [postulacion.mascota_id, postulacionId]
       );
+
+      rechazadosAutomaticamente = rechazadas.rows.map(
+        (fila) => Number(fila.adoptante_id)
+      );
+
     }
     await conexion.query(
       `UPDATE postulaciones
@@ -228,6 +321,98 @@ export const POST: APIRoute = async ({
     );
 
     await conexion.query("COMMIT");
+
+    // ==========================================
+    // NOTIFICACIONES DE APROBACIÓN O RECHAZO
+    // ==========================================
+
+    try {
+      const informacion = await db.query(
+        `SELECT
+          m.nombre AS mascota,
+          u.correo AS correo_adoptante
+        FROM postulaciones p
+        JOIN mascotas m ON m.id = p.mascota_id
+        JOIN usuarios u ON u.id = p.adoptante_id
+        WHERE p.id = $1`,
+        [postulacionId]
+      );
+
+      const datosCorreo = informacion.rows[0];
+
+      const avisos: Promise<void>[] = [];
+
+      if (datosCorreo?.correo_adoptante) {
+        avisos.push(
+          enviarAvisoKodaApp({
+            para: datosCorreo.correo_adoptante,
+
+            asunto:
+              nuevoEstado === "aprobada"
+                ? "Postulación aprobada"
+                : "Postulación rechazada",
+
+            titulo:
+              nuevoEstado === "aprobada"
+                ? "¡Tu postulación fue aprobada!"
+                : "Resultado de tu postulación",
+
+            mensaje:
+              nuevoEstado === "aprobada"
+                ? "La organización aprobó tu solicitud de adopción. Ingresa a KodaApp para consultar el resultado y continuar el proceso."
+                : "La organización no aprobó tu solicitud de adopción. Puedes seguir explorando otras mascotas disponibles.",
+
+            detalle:
+              `Mascota: ${datosCorreo.mascota}`
+          })
+        );
+      }
+
+      // Si se aprobó una adopción, avisar también
+      // a quienes fueron rechazados automáticamente.
+      if (rechazadosAutomaticamente.length > 0) {
+        const otros = await db.query(
+          `SELECT correo
+          FROM usuarios
+          WHERE id = ANY($1::integer[])`,
+          [rechazadosAutomaticamente]
+        );
+
+        for (const adoptante of otros.rows) {
+          if (!adoptante.correo) continue;
+
+          avisos.push(
+            enviarAvisoKodaApp({
+              para: adoptante.correo,
+              asunto: "Resultado de tu postulación",
+              titulo: "Actualización de tu solicitud",
+              mensaje:
+                "La mascota fue asignada a otra persona. " +
+                "Tu postulación se cerró automáticamente.",
+              detalle: `Mascota: ${datosCorreo.mascota}`
+            })
+          );
+        }
+      }
+
+      const resultados = await Promise.allSettled(avisos);
+
+      resultados.forEach((resultado) => {
+        if (resultado.status === "rejected") {
+          console.error(
+            "Error enviando aviso de adopción:",
+            resultado.reason
+          );
+        }
+      });
+
+    } catch (error) {
+      console.error(
+        "Error preparando notificaciones de adopción:",
+        error
+      );
+    }
+
 
     return responder({
       ok: true,
