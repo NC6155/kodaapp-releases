@@ -156,10 +156,46 @@ if (usuario) {
                 Panel de Inicio
               </a>
 
+              
               <a href="/perfil">
                 <i class="fa-solid fa-user"></i>
                 Mi perfil
               </a>
+
+              <!-- ACCESOS DE ORGANIZACIÓN -->
+              {
+                usuario.tipo_usuario === "organizacion" && (
+                  <>
+                    <a href="/gestion/postulaciones">
+                      <i class="fa-solid fa-clipboard-list"></i>
+                      Postulaciones recibidas
+                    </a>
+
+                    <a href="/gestion/historial">
+                      <i class="fa-solid fa-clock-rotate-left"></i>
+                      Historial de adopciones
+                    </a>
+                  </>
+                )
+              }
+
+              <!-- ACCESOS DE ADOPTANTE -->
+              {
+                usuario.tipo_usuario === "adoptante" && (
+                  <>
+                    <a href="/mis-postulaciones">
+                      <i class="fa-solid fa-clipboard-check"></i>
+                      Mis postulaciones
+                    </a>
+
+                    <a href="/favoritos">
+                      <i class="fa-solid fa-heart"></i>
+                      Mis favoritos
+                    </a>
+                  </>
+                )
+              }
+
 
               <button
                 type="button"
