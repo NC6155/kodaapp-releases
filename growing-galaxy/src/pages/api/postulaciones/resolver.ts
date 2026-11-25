@@ -82,6 +82,11 @@ export const POST: APIRoute = async ({
   const postulacionId = Number(datos.postulacionId);
   const decision = datos.decision;
 
+  const motivoFinTenencia =
+    typeof datos.motivoFinTenencia === "string"
+      ? datos.motivoFinTenencia.trim()
+      : "";
+
   if (
     !Number.isSafeInteger(postulacionId) ||
     postulacionId <= 0 ||
@@ -90,6 +95,20 @@ export const POST: APIRoute = async ({
     return responder({
       ok: false,
       mensaje: "Postulación o decisión inválida."
+    }, 400);
+  }
+
+  if (
+    decision === "cerrar" &&
+    (
+      motivoFinTenencia.length === 0 ||
+      motivoFinTenencia.length > 500
+    )
+  ) {
+    return responder({
+      ok: false,
+      mensaje:
+        "Debes indicar un motivo de finalización de entre 1 y 500 caracteres."
     }, 400);
   }
 
@@ -202,7 +221,7 @@ export const POST: APIRoute = async ({
       if (postulacion.estado !== "aprobada" || postulacion.fin_tenencia) {
         throw new ReglaAdopcion("La postulación no tiene una tenencia activa.");
       }
-      await conexion.query("UPDATE postulaciones SET fin_tenencia = now() WHERE id = $1", [postulacionId]);
+      await conexion.query( `UPDATE postulaciones SET fin_tenencia = NOW(), motivo_fin_tenencia = $1 WHERE id = $2`, [motivoFinTenencia, postulacionId]);    
       await conexion.query(`UPDATE mascotas SET estado_adopcion = 'disponible', publicada = FALSE WHERE id = $1`, [postulacion.mascota_id]);
       await conexion.query("COMMIT");
       try {

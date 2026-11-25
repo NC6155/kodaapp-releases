@@ -189,12 +189,41 @@ const fechaHora = (valor: Date | string) => {
                 }
 
                 {
-                  postulacion.estado === "aprobada" && !postulacion.fin_tenencia && (
-                    <form class="post-decision-form" data-postulacion-id={postulacion.id}>
-                      <button type="submit" value="cerrar" class="btn-primary">Cerrar tenencia y liberar cupo</button>
-                    </form>
-                  )
-                }
+                    postulacion.estado === "aprobada" &&
+                    !postulacion.fin_tenencia && (
+                      <form
+                        class="post-decision-form"
+                        data-postulacion-id={postulacion.id}
+                      >
+                        <div class="post-field" style="width: 100%;">
+                          <label for={`motivo-fin-${postulacion.id}`}>
+                            Motivo de finalización de la tenencia
+                          </label>
+
+                          <textarea
+                            id={`motivo-fin-${postulacion.id}`}
+                            name="motivoFinTenencia"
+                            placeholder="Describe el motivo por el cual finaliza la tenencia..."
+                            maxlength="500"
+                            rows="3"
+                            required
+                          ></textarea>
+
+                          <small>
+                            Campo obligatorio. Máximo 500 caracteres.
+                          </small>
+                        </div>
+
+                        <button
+                          type="submit"
+                          value="cerrar"
+                          class="btn-primary"
+                        >
+                          Cerrar tenencia y liberar cupo
+                        </button>
+                      </form>
+                    )
+                  }
                 {postulacion.fin_tenencia && <p>Tenencia cerrada el {fechaHora(postulacion.fin_tenencia)}</p>}
                 {
                   postulacion.estado !== "pendiente" && (
@@ -284,7 +313,15 @@ const fechaHora = (valor: Date | string) => {
                 postulacionId: Number(
                   formulario.dataset.postulacionId
                 ),
-                decision
+                decision,
+                motivoFinTenencia:
+                  decision === "cerrar"
+                    ? String(
+                        new FormData(formulario).get(
+                          "motivoFinTenencia"
+                        ) ?? ""
+                      ).trim()
+                    : undefined
               })
             }
           );
