@@ -1,7 +1,15 @@
 
+---
+interface Props {
+  paso?: string;
+}
+
+const { paso = "07" } = Astro.props;
+---
+
 <section class="form-section ka-galeria">
   <div class="form-section-header">
-    <span class="form-step">06</span>
+    <span class="form-step">{paso}</span>
     <div>
       <h2>Galería de fotografías</h2>
       <p>
