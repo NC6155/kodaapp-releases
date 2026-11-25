@@ -9,4 +9,15 @@ export default defineConfig({
     mode: 'standalone',
     bodySizeLimit: 30 * 1024 * 1024,
   }),
+  // Configuración de seguridad para permitir las solicitudes en la IP elástica de AWS
+  security: {
+    checkOrigin: true,
+
+    allowedDomains: [
+      {
+        hostname: "32.201.144.64", //IP elástica de AWS
+        protocol: "https",
+      },
+    ],
+  },
 });
